@@ -40,10 +40,10 @@ Z_SAFE_FLANGE = 35.0
 
 # Tọa độ điểm thả mặc định cho mọi khối màu theo cấu hình của bạn:
 DEFAULT_DROP_TARGET = {
-    "x": -24.1,
-    "y": 222.2,
+    "x": 267.7,
+    "y": 28.7,
     "z": -44.0,
-    "name": "Khay Cố Định (-24.1, 222.2)"
+    "name": "Khay Cố Định (267.7, 28.7)"
 }
 
 # Độ bù trừ vị trí hút phôi (Tăng X lên 0.5 cm = 5.0 mm theo yêu cầu):
@@ -274,8 +274,8 @@ def main():
                         help="Mô hình YOLO chỉ định (Mặc định: ưu tiên best_v8_more_augmentation.pt)")
     parser.add_argument("--width", type=int, default=1280, help="Độ rộng khung hình (1280)")
     parser.add_argument("--height", type=int, default=720, help="Độ cao khung hình (720)")
-    parser.add_argument("--drop_x", type=float, default=-24.1, help="Tọa độ X điểm thả (default: -24.1)")
-    parser.add_argument("--drop_y", type=float, default=222.2, help="Tọa độ Y điểm thả (default: 222.2)")
+    parser.add_argument("--drop_x", type=float, default=267.7, help="Tọa độ X điểm thả (default: 267.7)")
+    parser.add_argument("--drop_y", type=float, default=28.7, help="Tọa độ Y điểm thả (default: 28.7)")
     parser.add_argument("--drop_z", type=float, default=-44.0, help="Tọa độ Z_Flange điểm thả (default: -44.0)")
     parser.add_argument("--pick_z", type=float, default=Z_PICK_FLANGE,
                         help=f"Độ cao Z_Flange khi hút (default: {Z_PICK_FLANGE} mm)")
