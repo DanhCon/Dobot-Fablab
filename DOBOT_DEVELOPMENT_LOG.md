@@ -289,3 +289,98 @@ Giao diện Web 3D (`dobot_visualizer.html`) đã được tái cấu trúc từ
 4. **Mô hình Cloud Broker (Firebase / MQTT giống ESP32):**
    - *Ưu điểm:* 100% chỉ dùng Web tĩnh Netlify, không cần tunnel chạy nền.
    - *Khuyết điểm:* Cần viết lại giao thức trao đổi dữ liệu sang dạng Pub/Sub hoặc REST, độ trễ cập nhật tư thế 3D sẽ cao hơn WebSocket trực tiếp.
+
+---
+
+## 10. TÍCH HỢP THỊ GIÁC MÁY TÍNH & CALIB HAND-EYE (VISION & HOMOGRAPHY CALIBRATION)
+
+### 10.1. Bản chất toán học: Phép biến đổi phối cảnh 2D phẳng (Planar Perspective Homography)
+Chuyển đổi từ tọa độ điểm ảnh Pixel $(u, v)$ từ camera treo nghiêng trên bàn sang tọa độ vật lý phẳng của Dobot $(X, Y)$ (tính bằng mm) theo ma trận phối cảnh $3 \times 3$:
+$$s \begin{bmatrix} X \\ Y \\ 1 \end{bmatrix} = \begin{bmatrix} h_{00} & h_{01} & h_{02} \\ h_{10} & h_{11} & h_{12} \\ h_{20} & h_{21} & 1 \end{bmatrix} \begin{bmatrix} u \\ v \\ 1 \end{bmatrix}$$
+$$X = \frac{h_{00}u + h_{01}v + h_{02}}{h_{20}u + h_{21}v + 1}, \quad Y = \frac{h_{10}u + h_{11}v + h_{12}}{h_{20}u + h_{21}v + 1}$$
+
+### 10.2. Công cụ Calib Hand-Eye: `calibrate_camera_to_dobot.py`
+- Tự động nạp ma trận nội tại $K$ và hệ số méo thấu kính $D$ từ `camera_calibration_toolkit/calib_data_mono.json` để khử méo ảnh (`cv2.undistort`).
+- Cho phép người dùng click 4 điểm mốc tương ứng giữa Pixel $(u, v)$ và tọa độ robot $(X, Y)$.
+- Tự động tính ma trận $H$ và lưu vào `homography_dobot.json` và `homography_dobot.npy`.
+- Tích hợp chế độ kiểm chứng thời gian thực (Verify Mode).
+
+### 10.3. Bộ thông số Calib chuẩn mới nhất (Cập nhật 26/09/2026):
+* **Điểm 1:** Pixel $(580, 354) \to (144.9, -147.9)$
+* **Điểm 2:** Pixel $(754, 476) \to (194.4, -92.7)$
+* **Điểm 3:** Pixel $(595, 605) \to (243.8, -143.9)$
+* **Điểm 4:** Pixel $(419, 471) \to (195.9, -200.8)$
+* **Sai số trung bình (Mean Error):** $0.00\text{ mm}$
+
+### 10.4. Lưu ý về hiện tượng ngoại suy phối cảnh (Perspective Extrapolation Divergence):
+- Khi một khối màu nằm **hoàn toàn bên trong** tứ giác 4 điểm mốc: Phép chiếu nội suy cực kỳ chính xác.
+- Khi một khối màu bị đặt **ra ngoài phạm vi 4 điểm mốc**: Góc nghiêng camera bị khuếch đại phi tuyến tính, làm tọa độ $X$ bị tụt dốc (ví dụ: khối Vàng trước đó bị tụt xuống $X=35.2$).
+- **Nguyên tắc cốt lõi:** Khi calib, luôn chọn 4 điểm rải rộng ra 4 góc xa nhất của vùng thao tác bàn làm việc để bao trọn mọi khối màu cần gắp.
+
+---
+
+## 11. ỨNG DỤNG TỰ ĐỘNG PHÂN LOẠI KHỐI MÀU (DOBOT_AUTO_SORT.PY)
+
+File mã nguồn chính: `Object_Detection/dobot_auto_sort.py` (và bản đồng bộ `DOBOT/dobot_auto_sort.py`).
+
+### 11.1. Các thông số làm việc vật lý tối ưu:
+- **Tọa độ điểm thả phôi cố định:**
+  - $X = 267.7\text{ mm}, Y = 28.7\text{ mm}, Z_{\text{Flange}} = -44.0\text{ mm}$
+  - Bán kính ngang: $R \approx 269.2\text{ mm}$ (nằm ngay phía trước robot, góc hơi chếch trái, tầm với cực kỳ an toàn).
+- **Độ cao hút phôi chuẩn:**
+  - $Z_{\text{Flange}} = -51.7\text{ mm}$ (tương ứng $Z_{\text{TCP}} = -111.2\text{ mm}$, đã hạ $0.4\text{ cm}$ theo tinh chỉnh thực tế).
+- **Độ cao di chuyển an toàn (Safe Arch Z):**
+  - $Z_{\text{Safe}} = +35.0\text{ mm}$ (mặt bích nhấc cao vượt chướng ngại vật).
+- **Độ bù vị trí hút (Offset):**
+  - $\text{Offset } X = +5.0\text{ mm}$ ($+0.5\text{ cm}$ để căn thẳng tâm giác hút vào phôi).
+
+### 11.2. Chu trình gắp thả an toàn (Safe Arch Pick-and-Place Worker):
+1. Robot bay trên đỉnh phôi ở độ cao an toàn $Z_{\text{Safe}} = 35.0\text{ mm}$.
+2. Bật bơm hút chân không (Suction on).
+3. Hạ thẳng trục $Z$ xuống độ cao hút $Z_{\text{Flange}} = -51.7\text{ mm}$.
+4. Nhấc thẳng lên độ cao an toàn $Z_{\text{Safe}}$.
+5. Bay ngang sang khay thả ($X=267.7, Y=28.7$).
+6. Hạ xuống khay ($Z_{\text{Flange}} = -44.0\text{ mm}$).
+7. Tắt bơm & xả khí nhả phôi (Suction off).
+8. Nhấc lên cao an toàn và hoàn tất chu trình.
+
+### 11.3. Phương thức tương tác điều khiển:
+- **Click chuột trái:** Click trực tiếp vào bất kỳ khối màu nào trên cửa sổ camera để robot gắp khối đó.
+- **Phím cách [SPACE]:** Tự động gắp khối màu đầu tiên tìm thấy.
+- **Phím [A]:** Bật/Tắt chế độ tự động hoàn toàn (Auto Sorting liên tục sau mỗi 2 giây).
+- **Phím [Q] / [ESC]:** Thoát an toàn.
+
+---
+
+## 12. BẢN CHẤT CƠ CHẾ HOMING PHẦN CỨNG VS ĐIỂM MẪU TRÊN WEB
+
+### 12.1. Nút "🏠 Về Gốc" ở thanh Footer:
+- Kích hoạt lệnh Homing cơ học cấp thấp của vi điều khiển Dobot (Lệnh `ID 31 - SetHOMECmd`).
+- Dobot sẽ tự động xoay các trục để chạm vào các công tắc cữ hành trình quang học, sau đó firmware tự động di chuyển về **vị trí Home xuất xưởng mặc định**:
+  - Tọa độ mặt bích (Flange): $X = 250.0\text{ mm}, Y = 0.0\text{ mm}, Z_{\text{Flange}} = 50.0\text{ mm}$.
+  - Do cánh tay gắn đầu hút dài $59.5\text{ mm}$, nên tọa độ mũi hút (TCP) hiển thị trên màn hình là:
+    $$Z_{\text{TCP}} = Z_{\text{Flange}} - 59.5 = 50.0 - 59.5 = \mathbf{-9.5\text{ mm}}.$$
+  - Hiển thị trên màn hình: **`TCP: (249.9, 0.0, -9.5)`** chính là vị trí gốc chuẩn xác của phần cứng Dobot!
+
+### 12.2. Điểm mẫu nhanh "🏠 Home (240, 0, 50)" trên giao diện Web:
+- Nút này thuộc mục *"⚡ ĐIỂM MẪU NHANH"*, có chức năng **nạp tọa độ đích vào cục mục tiêu 3D (Target Beacon)**, chứ không tự ý kích hoạt robot di chuyển.
+- Để robot di chuyển tới tọa độ $(240, 0, 50)$, người dùng chỉ cần bấm nút **"🚀 Bay Thẳng (Direct)"** hoặc **"📦 Nhấc An Toàn (Safe Jump)"**.
+
+---
+
+## 13. QUẢN LÝ MÃ NGUỒN GIT REPOSITORY
+
+- Thư mục `DOBOT` (`/home/danh/FABLAB/DOBOT`) đã được khởi tạo thành Git repository độc lập với nhánh `main`.
+- Đã cấu hình `.gitignore` loại trừ file binary nặng (`cloudflared` 40MB) và log files.
+- Đã đóng gói đầy đủ:
+  - Hệ thống Digital Twin Web 3D (`dobot_visualizer.html`, `dist_netlify/`)
+  - Server Tornado API (`dobot_live_server.py`)
+  - Module AI phân loại (`dobot_auto_sort.py`)
+  - File ma trận calib (`homography_dobot.json`, `.npy`)
+- Sẵn sàng liên kết remote và push lên GitHub cá nhân (`DanhCon`):
+  ```bash
+  cd /home/danh/FABLAB/DOBOT
+  git remote add origin git@github.com:DanhCon/<ten-repo>.git
+  git push -u origin main
+  ```
+
