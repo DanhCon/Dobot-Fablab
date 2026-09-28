@@ -378,9 +378,89 @@ File mã nguồn chính: `Object_Detection/dobot_auto_sort.py` (và bản đồn
   - Module AI phân loại (`dobot_auto_sort.py`)
   - File ma trận calib (`homography_dobot.json`, `.npy`)
 - Sẵn sàng liên kết remote và push lên GitHub cá nhân (`DanhCon`):
-  ```bash
-  cd /home/danh/FABLAB/DOBOT
-  git remote add origin git@github.com:DanhCon/<ten-repo>.git
-  git push -u origin main
-  ```
+```bash
+cd /home/danh/FABLAB/DOBOT
+git remote add origin git@github.com:DanhCon/<ten-repo>.git
+git push -u origin main
+```
+---
 
+## 14. CÁC TÍNH NĂNG CẦN SỬA & HƯỚNG HOÀN THIỆN (BUGS TO FIX & ROADMAP)
+
+Dưới đây là phân tích chi tiết các vấn đề kỹ thuật phát sinh trong quá trình vận hành thực tế và giải pháp kỹ thuật cần áp dụng:
+
+### 14.1. Lỗi 1: Thiếu bộ lọc vùng an toàn khi Click chuột và bấm phím [SPACE] (`dobot_auto_sort.py`)
+- **Hiện trạng mã nguồn:**
+  - Trong chế độ tự động `[A]`, vòng lặp đã có sẵn bộ lọc an toàn:
+    ```python
+    r_target = math.sqrt(best_cube['rx']**2 + best_cube['ry']**2)
+    if not (140.0 <= r_target <= 330.0):
+        print(f"[Auto] Khối màu nằm ngoài vùng an toàn (R={r_target:.1f}mm), bỏ qua...")
+        continue
+    ```
+  - Tuy nhiên, trong sự kiện **Click chuột trái (`on_mouse`)** và **Bấm phím cách (`ord(' ')`)**:
+    Tọa độ sau khi giải mã qua ma trận Homography được đưa thẳng vào luồng gắp `pick_and_place_async(rx, ry, drop_pos)` mà **hoàn toàn không kiểm tra giới hạn không gian làm việc**.
+
+- **Hành vi thực tế của Dobot khi người dùng chọn vật thể ngoài tầm với:**
+  1. **Phần cứng báo động (Alarm State):** Khi tọa độ gửi xuống có bán kính $R < 140\text{ mm}$ (quá gần chân đế) hoặc $R > 330\text{ mm}$ (vượt quá chiều dài vươn cơ học), thuật toán Động học nghịch (IK) trên firmware STM32 không thể giải được nghiệm. Firmware lập tức kích hoạt cờ lỗi:
+     - `0x10`: `ERR_PLAN_INV_CALC` (Lỗi thuật toán quy hoạch đường đi).
+     - `0x11`: `ERR_PLAN_INV_SINGULARITY` (Rơi vào điểm kỳ dị động học).
+     - `0x12`: `ERR_PLAN_INV_LIMIT` (Vượt quá giới hạn tọa độ phần mềm).
+  2. **Trạng thái robot:** Cánh tay Dobot lập tức phanh dừng khẩn cấp, **đèn LED chân đế chuyển sang MÀU ĐỎ**, và **còi buzzer phát tiếng kêu bíp liên tục**.
+  3. **Hiện tượng "Chu trình ma" (Ghost Cycle):** Do luồng `pick_and_place_async` trong Python được viết dạng tuần tự bằng `time.sleep()`, Python không hề biết robot đã bị khóa cứng do Alarm. Luồng vẫn tiếp tục:
+     - Bật bơm hút chân không (tiếng rơ-le nhảy rè rè).
+     - Chờ 1.5s $\to$ gửi lệnh hạ trục $Z$ ảo $\to$ chờ 1.0s $\to$ gửi lệnh nhấc lên ảo $\to$ gửi lệnh bay sang khay thả ảo $\to$ tắt bơm hút.
+     - Trong suốt thời gian đó, cánh tay robot vẫn đứng im tại chỗ do đang bị kẹt lỗi phần cứng.
+
+- **Giải pháp kỹ thuật cần triển khai:**
+  - Xây dựng hàm kiểm tra không gian làm việc chuẩn:
+    ```python
+    def is_safe_workspace(rx, ry):
+        r = math.sqrt(rx**2 + ry**2)
+        # Bán kính an toàn: 140mm <= R <= 330mm và X >= 70mm (phía trước robot)
+        return (140.0 <= r <= 330.0) and (rx >= 70.0)
+    ```
+  - Trong `on_mouse` và `ord(' ')`: Nếu `not is_safe_workspace(rx, ry)`, **từ chối gửi lệnh gắp**, hiển thị cảnh báo đỏ OSD trên khung hình camera:
+    `cv2.putText(frame, "CẢNH BÁO: VẬT THỂ NGOÀI TẦM VỚI (OUT OF WORKSPACE)!", ...)` và in ra terminal để người dùng biết.
+
+---
+
+### 14.2. Lỗi 2: Chu trình gắp chạy mù theo `time.sleep` (Open-loop Execution)
+- **Nguyên nhân cốt lõi:**
+  - Sử dụng `time.sleep(1.0)` đến `time.sleep(1.5)` giữa các bước di chuyển là cơ chế điều khiển vòng hở (Open-loop).
+  - Nếu vi điều khiển gặp sự cố (vướng cản, quá tốc độ `0x30`, chạm cữ `0x40`, hoặc mất kết nối serial), chương trình Python hoàn toàn không nhận biết được.
+- **Giải pháp kỹ thuật cần triển khai:**
+  - Thay thế `time.sleep` bằng việc đọc chỉ số hàng đợi lệnh (`QueuedCmdIndex`):
+    - Mỗi lệnh `set_ptpcmd` trả về một `cmd_index`.
+    - Viết hàm `wait_cmd_finished(device, target_index, timeout=5.0)`: Đọc `get_queued_cmd_current_index()`, chỉ chuyển sang bước tiếp theo khi robot đã hoàn thành lệnh hoặc hết timeout.
+  - Trước mỗi bước chuyển động, đọc cờ Alarm `ID 20`. Nếu phát hiện có lỗi $\\neq 0$, lập tức hủy chu trình (abort), ngắt bơm hút và báo lỗi lên giao diện.
+
+---
+
+### 14.3. Cải tiến 3: Trải nghiệm người dùng với nút "Về Gốc (Homing)"
+- **Vấn đề đặt ra:**
+  - Khi người dùng bấm nút "Về Gốc" trên Web, lệnh Homing phần cứng (`ID 31 - SetHOMECmd`) sẽ đưa robot về điểm gốc xuất xưởng của mặt bích ($X=250.0, Y=0.0, Z_{\\text{Flange}}=50.0 \\implies Z_{\\text{TCP}}=-9.5\\text{ mm}$).
+  - Người dùng thường mong muốn robot sau khi Homing xong sẽ tự động nâng đầu hút lên vị trí làm việc an toàn chuẩn $(X=240.0, Y=0.0, Z=50.0)$.
+- **Giải pháp kỹ thuật cần triển khai:**
+  - Trong `dobot_live_server.py`, tại hàm xử lý action `"home"`, sau khi phát lệnh Homing thành công, lập tức gửi tiếp lệnh di chuyển PTP đưa robot tới điểm làm việc mong muốn $(240, 0, 50)$ để sẵn sàng gắp thả.
+
+---
+
+### 14.4. Cải tiến 4: Bộ lọc vùng lồi (Convex Hull Boundary Check) cho thị giác Homography
+- **Vấn đề đặt ra:**
+  - Khi một khối màu nằm **ngoài** tứ giác tạo bởi 4 điểm calib, phép biến đổi phối cảnh 2D phẳng (Homography) xảy ra hiện tượng ngoại suy phân kỳ phi tuyến tính, làm sai lệch tọa độ robot rất lớn (ví dụ khối Vàng bị đẩy về $X < 50\\text{ mm}$).
+- **Giải pháp kỹ thuật cần triển khai:**
+  - Dùng hàm `cv2.pointPolygonTest()` kiểm tra tâm phôi `(cx, cy)` có nằm trong đa giác 4 điểm calib hay không.
+  - Nếu nằm ngoài đa giác: Đổi viền bounding box sang màu vàng cam và hiển thị nhãn `"NGOÀI VÙNG CALIB"` để nhắc người dùng gạt phôi vào giữa bàn làm việc.
+
+---
+
+### 14.5. Bảng theo dõi tiến độ sửa đổi (Todo / Roadmap Tracker)
+
+| STT | Hạng mục / Tính năng cần sửa | File liên quan | Mức độ ưu tiên | Trạng thái |
+| :---: | :--- | :--- | :---: | :---: |
+| **1** | Thêm kiểm tra vùng an toàn $R \\in [140, 330]\\text{ mm}$ cho Click chuột & Phím cách | `Object_Detection/dobot_auto_sort.py`<br>`DOBOT/dobot_auto_sort.py` | 🔴 **Cao (High)** | ⏳ Chờ áp dụng code |
+| **2** | Cảnh báo trực quan bằng OSD đỏ trên khung hình camera khi click điểm ngoài vùng | `dobot_auto_sort.py` | 🟡 **Trung bình** | ⏳ Chờ áp dụng code |
+| **3** | Chuyển chu trình gắp thả từ `time.sleep` sang đóng vòng phản hồi theo Queue Index | `dobot_auto_sort.py` | 🟡 **Trung bình** | ⏳ Chờ áp dụng code |
+| **4** | Tự động di chuyển về $(240, 0, 50)$ sau khi chu trình Homing phần cứng kết thúc | `dobot_live_server.py`<br>`dobot_visualizer.html` | 🟢 **Tiện ích** | ⏳ Đề xuất nâng cấp |
+| **5** | Lọc tọa độ phôi bằng đa giác lồi 4 điểm Calib Homography (`pointPolygonTest`) | `dobot_auto_sort.py` | 🟢 **Tiện ích** | ⏳ Đề xuất nâng cấp |

@@ -357,6 +357,38 @@
             transform: translate(14px, 14px);
         }
 
+        /* TEACH & PLAYBACK STYLES */
+        .teach-card {
+            background: rgba(26, 31, 44, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px; padding: 7px 9px;
+            transition: all 0.2s ease;
+        }
+        .teach-card:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(30, 36, 52, 0.95);
+        }
+        .teach-card.active-step {
+            border-color: #22c55e !important;
+            background: rgba(34, 197, 94, 0.15) !important;
+            box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+        }
+        .btn-teach-action {
+            background: #232731; border: 1px solid #495057; color: #cbd5e1;
+            border-radius: 4px; padding: 3px 6px; font-size: 11px; cursor: pointer;
+            transition: 0.15s; line-height: 1;
+        }
+        .btn-teach-action:hover { background: #339af0; color: #fff; border-color: #339af0; }
+        .btn-teach-del:hover { background: #dc2626 !important; color: #fff !important; border-color: #ef4444 !important; }
+        .teach-select {
+            background: #1e2330; color: #f1f5f9; border: 1px solid #475569;
+            border-radius: 4px; padding: 2px 4px; font-size: 10.5px; outline: none;
+        }
+        .teach-input-num {
+            background: #1e2330; color: #f1f5f9; border: 1px solid #475569;
+            border-radius: 4px; padding: 2px 4px; font-size: 10.5px; outline: none; width: 42px; text-align: center;
+        }
+
         /* 3D GIZMO STYLES */
         .btn-gizmo {
             width: 100%;
@@ -502,6 +534,7 @@
             <div class="nav-tabs">
                 <button id="tab-nav-target" class="nav-tab active" onclick="switchTab('target')">🎯 Điểm Đích</button>
                 <button id="tab-nav-jog" class="nav-tab" onclick="switchTab('jog')">🕹️ Điều Khiển</button>
+                <button id="tab-nav-teach" class="nav-tab" onclick="switchTab('teach')">📋 Dạy Điểm</button>
                 <button id="tab-nav-monitor" class="nav-tab" onclick="switchTab('monitor')">📊 Giám Sát</button>
             </div>
         </div>
@@ -707,7 +740,71 @@
                 </div>
             </div>
 
-            <!-- TAB 3: GIÁM SÁT & CÀI ĐẶT -->
+            <!-- TAB 3: DẠY ĐIỂM & CHẠY CHUỖI (TEACH & PLAYBACK) -->
+            <div id="tab-pane-teach" style="display: none;">
+                <!-- Thanh công cụ thêm điểm -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px;">
+                    <button class="btn-action" style="background: #1e3a5f; border-color: #3b82f6; color: #93c5fd; padding: 7px 6px; font-size: 11.5px;" onclick="addCurrentRobotPoseToTeach()" title="Lấy tọa độ robot thật nạp vào danh sách">
+                        📍 Lưu Robot Thật
+                    </button>
+                    <button class="btn-action" style="background: #2e1065; border-color: #a855f7; color: #d8b4fe; padding: 7px 6px; font-size: 11.5px;" onclick="addTargetGizmoPoseToTeach()" title="Lấy tọa độ cục đích 3D nạp vào danh sách">
+                        🎯 Lưu Cục Đích 3D
+                    </button>
+                </div>
+
+                <!-- Bộ điều khiển Chạy Chuỗi (Playback Controller) -->
+                <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px; margin-bottom: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-weight: 700; font-size: 11.5px; color: #f1f5f9;">🎮 BỘ ĐIỀU KHIỂN CHẠY</span>
+                        <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: #94a3b8; cursor: pointer;">
+                            <input type="checkbox" id="chk-playback-loop" onchange="togglePlaybackLoop(this.checked)">
+                            <span>🔁 Lặp liên tục</span>
+                        </label>
+                    </div>
+                    <div style="display: flex; gap: 5px;">
+                        <button id="btn-playback-run" class="btn-action" style="background: #15803d; border-color: #22c55e; color: #fff; flex: 2; padding: 8px 4px; font-weight: bold;" onclick="startPlayback()">
+                            ▶️ CHẠY CHUỖI
+                        </button>
+                        <button id="btn-playback-pause" class="btn-action" style="background: #a16207; border-color: #eab308; color: #fff; flex: 1.2; padding: 8px 4px;" onclick="pausePlayback()" disabled>
+                            ⏸️ Tạm Dừng
+                        </button>
+                        <button id="btn-playback-stop" class="btn-action" style="background: #991b1b; border-color: #ef4444; color: #fff; flex: 1; padding: 8px 4px;" onclick="stopPlayback()" disabled>
+                            ⏹️ Dừng
+                        </button>
+                    </div>
+                    <div id="playback-status-bar" style="margin-top: 6px; font-size: 11px; color: #94a3b8; text-align: center; background: rgba(0,0,0,0.25); padding: 4px; border-radius: 4px;">
+                        Trạng thái: Sẵn sàng
+                    </div>
+                </div>
+
+                <!-- Danh sách điểm đã dạy -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <span style="font-size: 11px; font-weight: 700; color: #cbd5e1;">📋 DANH SÁCH ĐIỂM (<span id="teach-count">0</span>):</span>
+                    <button onclick="clearAllTeachPoints()" style="background: transparent; border: none; color: #f87171; font-size: 10.5px; cursor: pointer; text-decoration: underline;">
+                        Xóa tất cả
+                    </button>
+                </div>
+
+                <div id="teach-list-container" style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; padding-right: 2px;">
+                    <!-- Sẽ được render động bằng JavaScript -->
+                </div>
+
+                <!-- Tiện ích Mẫu, Xuất/Mở File -->
+                <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px;">
+                    <button class="btn-step" style="padding: 5px;" onclick="loadSampleTeachPreset()" title="Nạp kịch bản gắp thả mẫu chuẩn">
+                        📦 Mẫu Gắp Thả
+                    </button>
+                    <button class="btn-step" style="padding: 5px;" onclick="exportTeachProgramJSON()" title="Xuất kịch bản ra file .json">
+                        💾 Xuất File
+                    </button>
+                    <button class="btn-step" style="padding: 5px;" onclick="document.getElementById('file-import-teach').click()" title="Nạp kịch bản từ file .json">
+                        📂 Mở File
+                    </button>
+                    <input type="file" id="file-import-teach" accept=".json" style="display: none;" onchange="importTeachProgramJSON(event)">
+                </div>
+            </div>
+
+            <!-- TAB 4: GIÁM SÁT & CÀI ĐẶT -->
             <div id="tab-pane-monitor" style="display: none;">
                 <!-- BẢNG THEO DÕI TỌA ĐỘ VỊ TRÍ ĐẦU HÚT -->
                 <div class="data-card" style="margin-top: 0;">
@@ -1512,13 +1609,16 @@
         }
 
         function switchTab(tabId) {
-            const tabs = ['target', 'jog', 'monitor'];
+            const tabs = ['target', 'jog', 'teach', 'monitor'];
             tabs.forEach(t => {
                 const navBtn = document.getElementById(`tab-nav-${t}`);
                 const pane = document.getElementById(`tab-pane-${t}`);
                 if (navBtn) navBtn.classList.toggle('active', t === tabId);
                 if (pane) pane.style.display = (t === tabId) ? 'block' : 'none';
             });
+            if (tabId === 'teach') {
+                renderTeachList();
+            }
         }
 
         function switchControlSubTab(sub) {
@@ -1803,6 +1903,422 @@
         }
 
         // ========================================================
+        // HỆ THỐNG DẠY ĐIỂM & CHẠY CHUỖI (TEACH & PLAYBACK)
+        // ========================================================
+        let teachWaypoints = [];
+        let isPlaybackRunning = false;
+        let isPlaybackPaused = false;
+        let playbackCurrentIndex = -1;
+        let playbackLoop = false;
+        let lastKnownRobotPose = { x: 250, y: 0, z: 50, r: 0, zTcp: -9.5 };
+
+        function sleepMs(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function addCurrentRobotPoseToTeach() {
+            const x = Math.round(lastKnownRobotPose.x * 10) / 10;
+            const y = Math.round(lastKnownRobotPose.y * 10) / 10;
+            const zTcp = Math.round(lastKnownRobotPose.zTcp * 10) / 10;
+            const r = Math.round(lastKnownRobotPose.r * 10) / 10;
+            const idx = teachWaypoints.length + 1;
+
+            teachWaypoints.push({
+                id: 'pt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                name: `Điểm ${idx}`,
+                x: x,
+                y: y,
+                zTcp: zTcp,
+                r: r,
+                moveType: 'safe',
+                suction: 'keep',
+                delay: 1.0
+            });
+
+            renderTeachList();
+            showToast(`📍 Đã lưu vị trí Robot: X=${x}, Y=${y}, Z=${zTcp}`);
+        }
+
+        function addTargetGizmoPoseToTeach() {
+            if (!targetBeaconGroup) return;
+            const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
+            const y = Math.round(-targetBeaconGroup.position.z * 10) / 10;
+            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE) * 10) / 10;
+            const r = parseFloat(document.getElementById('inp-target-r').value) || 0;
+            const idx = teachWaypoints.length + 1;
+
+            teachWaypoints.push({
+                id: 'pt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                name: `Cục Đích ${idx}`,
+                x: x,
+                y: y,
+                zTcp: zTcp,
+                r: Math.round(r * 10) / 10,
+                moveType: 'safe',
+                suction: 'keep',
+                delay: 1.0
+            });
+
+            renderTeachList();
+            showToast(`🎯 Đã lưu Cục Đích: X=${x}, Y=${y}, Z=${zTcp}`);
+        }
+
+        function renderTeachList() {
+            const container = document.getElementById('teach-list-container');
+            const countEl = document.getElementById('teach-count');
+            if (countEl) countEl.innerText = teachWaypoints.length;
+            if (!container) return;
+
+            if (teachWaypoints.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; color: #64748b; font-size: 11.5px; padding: 25px 10px; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px;">
+                        Chưa có điểm nào.<br>
+                        Bấm <b>📍 Lưu Robot Thật</b> hoặc <b>🎯 Lưu Cục Đích 3D</b> để bắt đầu dạy kịch bản!
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            teachWaypoints.forEach((pt, idx) => {
+                const isCurrent = (isPlaybackRunning && playbackCurrentIndex === idx);
+                html += `
+                    <div class="teach-card ${isCurrent ? 'active-step' : ''}" id="teach-step-${idx}">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-weight: 700; color: #38bdf8; font-size: 11px;">#${idx + 1}</span>
+                                <input type="text" value="${pt.name}" onchange="updateTeachPointProp(${idx}, 'name', this.value)"
+                                    style="background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 11.5px; font-weight: 600; width: 85px; outline: none; padding: 1px 2px;">
+                            </div>
+                            <span style="font-family: monospace; font-size: 10.5px; color: #94a3b8;">
+                                X:${pt.x.toFixed(0)} Y:${pt.y.toFixed(0)} Z:${pt.zTcp.toFixed(0)}
+                            </span>
+                            <div style="display: flex; gap: 3px;">
+                                <button class="btn-teach-action" onclick="executeSingleTeachPoint(${idx})" title="Chạy thử điểm này">▶️</button>
+                                <button class="btn-teach-action btn-teach-del" onclick="deleteTeachPoint(${idx})" title="Xóa điểm này">🗑️</button>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 5px; margin-top: 5px; align-items: center;">
+                            <select class="teach-select" onchange="updateTeachPointProp(${idx}, 'moveType', this.value)" style="flex: 1.1;">
+                                <option value="safe" ${pt.moveType === 'safe' ? 'selected' : ''}>📦 Safe Jump</option>
+                                <option value="direct" ${pt.moveType === 'direct' ? 'selected' : ''}>🚀 Direct PTP</option>
+                            </select>
+                            <select class="teach-select" onchange="updateTeachPointProp(${idx}, 'suction', this.value)" style="flex: 1.1;">
+                                <option value="keep" ${pt.suction === 'keep' ? 'selected' : ''}>💨 Giữ nguyên</option>
+                                <option value="on" ${pt.suction === 'on' ? 'selected' : ''}>💨 Bật hút</option>
+                                <option value="off" ${pt.suction === 'off' ? 'selected' : ''}>❌ Tắt/Xả</option>
+                            </select>
+                            <div style="display: flex; align-items: center; gap: 2px;">
+                                <input type="number" class="teach-input-num" value="${pt.delay || 1.0}" step="0.5" min="0" max="30"
+                                    onchange="updateTeachPointProp(${idx}, 'delay', parseFloat(this.value) || 0)">
+                                <span style="font-size: 10px; color: #94a3b8;">s</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function updateTeachPointProp(idx, prop, value) {
+            if (teachWaypoints[idx]) {
+                teachWaypoints[idx][prop] = value;
+            }
+        }
+
+        function deleteTeachPoint(idx) {
+            if (isPlaybackRunning) {
+                showToast("⚠️ Vui lòng dừng kịch bản trước khi xóa điểm!");
+                return;
+            }
+            teachWaypoints.splice(idx, 1);
+            renderTeachList();
+        }
+
+        function clearAllTeachPoints() {
+            if (teachWaypoints.length === 0) return;
+            if (confirm("Bạn có chắc chắn muốn xóa toàn bộ danh sách điểm đã dạy?")) {
+                if (isPlaybackRunning) stopPlayback();
+                teachWaypoints = [];
+                renderTeachList();
+                showToast("🗑️ Đã xóa sạch danh sách điểm!");
+            }
+        }
+
+        function togglePlaybackLoop(checked) {
+            playbackLoop = checked;
+        }
+
+        function executeSingleTeachPoint(idx) {
+            const pt = teachWaypoints[idx];
+            if (!pt) return;
+            const zFlange = pt.zTcp + toolOffset;
+            if (pt.moveType === 'safe') {
+                sendAction('safe_jump', { x: pt.x, y: pt.y, z: zFlange, r: pt.r });
+            } else {
+                sendAction('move_xyz', { x: pt.x, y: pt.y, z: zFlange, r: pt.r, mode: 1 });
+            }
+
+            if (pt.suction === 'on') {
+                setSuctionState(true);
+            } else if (pt.suction === 'off') {
+                setSuctionState(false);
+            }
+
+            showToast(`▶️ Đang di chuyển tới ${pt.name} (X=${pt.x}, Y=${pt.y}, Z=${pt.zTcp})`);
+        }
+
+        function setSuctionState(enable) {
+            isSuctionOn = enable;
+            const btn = document.getElementById('btn-suction');
+            if (btn) {
+                btn.classList.toggle('active-suction', isSuctionOn);
+                btn.innerText = isSuctionOn ? "💨 Tắt Giác Hút" : "💨 Giác Hút";
+            }
+            sendAction('suction', isSuctionOn);
+        }
+
+        function waitForRobotToReach(tx, ty, tzFlange, timeoutMs=7000) {
+            return new Promise(resolve => {
+                const startTime = Date.now();
+                const timer = setInterval(() => {
+                    if (!isPlaybackRunning) {
+                        clearInterval(timer);
+                        resolve();
+                        return;
+                    }
+                    const cur = lastKnownRobotPose;
+                    if (cur) {
+                        const dx = cur.x - tx;
+                        const dy = cur.y - ty;
+                        const dz = cur.z - tzFlange;
+                        const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                        // Khi robot tới gần mục tiêu < 3.0mm, chuyển tiếp bước tiếp theo
+                        if (dist < 3.0) {
+                            clearInterval(timer);
+                            resolve();
+                            return;
+                        }
+                    }
+                    if (Date.now() - startTime > timeoutMs) {
+                        clearInterval(timer);
+                        resolve();
+                    }
+                }, 80);
+            });
+        }
+
+        async function startPlayback() {
+            if (teachWaypoints.length === 0) {
+                showToast("⚠️ Danh sách điểm đang trống! Hãy thêm điểm trước.");
+                return;
+            }
+
+            if (isPlaybackRunning && isPlaybackPaused) {
+                isPlaybackPaused = false;
+                document.getElementById('btn-playback-pause').innerText = "⏸️ Tạm Dừng";
+                document.getElementById('playback-status-bar').innerText = "Đang tiếp tục...";
+                return;
+            }
+
+            isPlaybackRunning = true;
+            isPlaybackPaused = false;
+            document.getElementById('btn-playback-run').disabled = true;
+            document.getElementById('btn-playback-pause').disabled = false;
+            document.getElementById('btn-playback-stop').disabled = false;
+
+            let loopCount = 0;
+            try {
+                do {
+                    loopCount++;
+                    for (let i = 0; i < teachWaypoints.length; i++) {
+                        if (!isPlaybackRunning) break;
+
+                        while (isPlaybackPaused && isPlaybackRunning) {
+                            await sleepMs(100);
+                        }
+                        if (!isPlaybackRunning) break;
+
+                        playbackCurrentIndex = i;
+                        renderTeachList();
+                        const pt = teachWaypoints[i];
+                        const statusBar = document.getElementById('playback-status-bar');
+                        if (statusBar) {
+                            statusBar.innerText = `Đang chạy: Bước ${i+1}/${teachWaypoints.length} (${pt.name})${playbackLoop ? ` | Vòng ${loopCount}` : ''}`;
+                            statusBar.style.color = "#4ade80";
+                        }
+
+                        // 1. Gửi lệnh di chuyển
+                        const zFlange = pt.zTcp + toolOffset;
+                        if (pt.moveType === 'safe') {
+                            sendAction('safe_jump', { x: pt.x, y: pt.y, z: zFlange, r: pt.r });
+                        } else {
+                            sendAction('move_xyz', { x: pt.x, y: pt.y, z: zFlange, r: pt.r, mode: 1 });
+                        }
+
+                        // 2. Chờ robot hoàn thành di chuyển
+                        await waitForRobotToReach(pt.x, pt.y, zFlange, 7000);
+                        if (!isPlaybackRunning) break;
+
+                        // 3. Xử lý giác hút nếu có cài đặt
+                        if (pt.suction === 'on') {
+                            setSuctionState(true);
+                            await sleepMs(350);
+                        } else if (pt.suction === 'off') {
+                            setSuctionState(false);
+                            await sleepMs(350);
+                        }
+
+                        // 4. Thời gian dừng chờ
+                        const waitTime = Math.max(0, (pt.delay || 1.0) * 1000);
+                        if (waitTime > 0) {
+                            await sleepMs(waitTime);
+                        }
+                    }
+                } while (isPlaybackRunning && playbackLoop);
+            } catch (err) {
+                console.error("Lỗi khi chạy kịch bản:", err);
+            } finally {
+                stopPlayback();
+            }
+        }
+
+        function pausePlayback() {
+            if (!isPlaybackRunning) return;
+            isPlaybackPaused = !isPlaybackPaused;
+            const btn = document.getElementById('btn-playback-pause');
+            const status = document.getElementById('playback-status-bar');
+            if (isPlaybackPaused) {
+                if (btn) btn.innerText = "▶️ Tiếp Tục";
+                if (status) {
+                    status.innerText = "⏸️ Kịch bản đang tạm dừng";
+                    status.style.color = "#facc15";
+                }
+            } else {
+                if (btn) btn.innerText = "⏸️ Tạm Dừng";
+                if (status) {
+                    status.innerText = "Đang tiếp tục...";
+                    status.style.color = "#4ade80";
+                }
+            }
+        }
+
+        function stopPlayback() {
+            isPlaybackRunning = false;
+            isPlaybackPaused = false;
+            playbackCurrentIndex = -1;
+            const btnRun = document.getElementById('btn-playback-run');
+            const btnPause = document.getElementById('btn-playback-pause');
+            const btnStop = document.getElementById('btn-playback-stop');
+            const statusBar = document.getElementById('playback-status-bar');
+
+            if (btnRun) btnRun.disabled = false;
+            if (btnPause) {
+                btnPause.disabled = true;
+                btnPause.innerText = "⏸️ Tạm Dừng";
+            }
+            if (btnStop) btnStop.disabled = true;
+            if (statusBar) {
+                statusBar.innerText = "Trạng thái: Sẵn sàng";
+                statusBar.style.color = "#94a3b8";
+            }
+            renderTeachList();
+        }
+
+        function loadSampleTeachPreset() {
+            if (isPlaybackRunning) {
+                showToast("⚠️ Vui lòng dừng kịch bản trước khi nạp mẫu!");
+                return;
+            }
+            teachWaypoints = [
+                {
+                    id: 'sample_1',
+                    name: 'Điểm Chờ',
+                    x: 240.0,
+                    y: 0.0,
+                    zTcp: 30.0,
+                    r: 0.0,
+                    moveType: 'safe',
+                    suction: 'off',
+                    delay: 0.5
+                },
+                {
+                    id: 'sample_2',
+                    name: 'Hạ Hút Phôi (A)',
+                    x: 200.0,
+                    y: 120.0,
+                    zTcp: -110.0,
+                    r: 0.0,
+                    moveType: 'safe',
+                    suction: 'on',
+                    delay: 1.0
+                },
+                {
+                    id: 'sample_3',
+                    name: 'Nhấc An Toàn',
+                    x: 200.0,
+                    y: 120.0,
+                    zTcp: 35.0,
+                    r: 0.0,
+                    moveType: 'direct',
+                    suction: 'keep',
+                    delay: 0.5
+                },
+                {
+                    id: 'sample_4',
+                    name: 'Thả Khay (B)',
+                    x: 267.7,
+                    y: 28.7,
+                    zTcp: -103.5,
+                    r: 0.0,
+                    moveType: 'safe',
+                    suction: 'off',
+                    delay: 1.0
+                }
+            ];
+            renderTeachList();
+            showToast("📦 Đã nạp kịch bản mẫu Gắp Thả 4 bước!");
+        }
+
+        function exportTeachProgramJSON() {
+            if (teachWaypoints.length === 0) {
+                showToast("⚠️ Chưa có điểm nào để xuất!");
+                return;
+            }
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(teachWaypoints, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `dobot_teach_program_${new Date().toISOString().slice(0, 10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast("💾 Đã xuất file kịch bản JSON!");
+        }
+
+        function importTeachProgramJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const loaded = JSON.parse(e.target.result);
+                    if (Array.isArray(loaded)) {
+                        teachWaypoints = loaded;
+                        renderTeachList();
+                        showToast(`📂 Đã nạp thành công ${loaded.length} điểm từ file JSON!`);
+                    } else {
+                        alert("Định dạng file JSON không hợp lệ (Phải là mảng các điểm)!");
+                    }
+                } catch (err) {
+                    alert("Lỗi khi đọc file JSON: " + err.message);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        // ========================================================
         // TƯƠNG TÁC CHUỘT SNAP VÀ DI CHUỘT TRÊN MẶT BÀN
         // ========================================================
         const raycaster = new THREE.Raycaster();
@@ -2041,6 +2557,17 @@
                 const msg = JSON.parse(event.data);
                 if (msg.type === "pose") {
                     if (msg.connected && msg.data) {
+                        lastKnownRobotPose = {
+                            x: msg.data.x,
+                            y: msg.data.y,
+                            z: msg.data.z,
+                            r: msg.data.r,
+                            zTcp: msg.data.z - toolOffset,
+                            j1: msg.data.j1,
+                            j2: msg.data.j2,
+                            j3: msg.data.j3,
+                            j4: msg.data.j4
+                        };
                         badge.className = "status-badge live";
                         badge.style.background = "";
                         badge.style.borderColor = "";
@@ -2144,6 +2671,7 @@
         initWebSocket();
         initTransformGizmo();
         updateTargetMarker();
+        renderTeachList();
         animate();
     </script>
 </body>

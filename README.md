@@ -149,6 +149,20 @@ Terminal sẽ cung cấp một đường link Cloudflare dạng `https://xxxx.tr
 
 ---
 
+## 🛠️ Các Tính Năng Đang Hoàn Thiện & Cần Sửa (Roadmap & Known Issues)
+
+1. **Kiểm tra vùng an toàn khi gắp thủ công (`dobot_auto_sort.py`):**
+   * *Hiện trạng:* Chế độ tự động `[A]` đã có bộ lọc bán kính an toàn ($140.0\text{ mm} \le R \le 330.0\text{ mm}$). Tuy nhiên, sự kiện click chuột trái và phím `[SPACE]` chưa chặn điểm ngoài vùng, khiến robot bị lỗi động học nghịch (Alarm `0x10`/`0x11`, đèn đỏ, còi kêu) nếu chọn vật thể ngoài tầm với.
+   * *Đang nâng cấp:* Thêm hàm lọc tọa độ an toàn `is_safe_workspace()` và hiển thị cảnh báo đỏ OSD trên khung hình camera.
+2. **Đóng vòng phản hồi chu trình gắp thả:**
+   * Thay thế chuỗi `time.sleep()` bằng cơ chế kiểm tra hàng đợi lệnh thực tế (`QueuedCmdIndex`) và tự động ngắt bơm khi phát hiện Alarm.
+3. **Tự động vào vị trí làm việc sau khi Homing:**
+   * Tự động đưa cánh tay về tọa độ an toàn $(240, 0, 50)$ ngay sau khi robot hoàn thành tìm cữ hành trình cơ học xuất xưởng.
+
+> 📖 *Chi tiết phân tích kỹ thuật, nguyên nhân gốc rễ và code mẫu: Xem tại [Mục 14 trong DOBOT_DEVELOPMENT_LOG.md](DOBOT_DEVELOPMENT_LOG.md).*
+
+---
+
 ## 👨‍💻 Tác giả & Đơn vị
 * **Phát triển bởi:** DanhCon (FABLAB)
 * **Kho lưu trữ:** [https://github.com/DanhCon/Dobot-Fablab](https://github.com/DanhCon/Dobot-Fablab)
