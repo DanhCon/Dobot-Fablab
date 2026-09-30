@@ -457,10 +457,52 @@ Dưới đây là phân tích chi tiết các vấn đề kỹ thuật phát sin
 
 ### 14.5. Bảng theo dõi tiến độ sửa đổi (Todo / Roadmap Tracker)
 
-| STT | Hạng mục / Tính năng cần sửa | File liên quan | Mức độ ưu tiên | Trạng thái |
-| :---: | :--- | :--- | :---: | :---: |
-| **1** | Thêm kiểm tra vùng an toàn $R \\in [140, 330]\\text{ mm}$ cho Click chuột & Phím cách | `Object_Detection/dobot_auto_sort.py`<br>`DOBOT/dobot_auto_sort.py` | 🔴 **Cao (High)** | ⏳ Chờ áp dụng code |
-| **2** | Cảnh báo trực quan bằng OSD đỏ trên khung hình camera khi click điểm ngoài vùng | `dobot_auto_sort.py` | 🟡 **Trung bình** | ⏳ Chờ áp dụng code |
-| **3** | Chuyển chu trình gắp thả từ `time.sleep` sang đóng vòng phản hồi theo Queue Index | `dobot_auto_sort.py` | 🟡 **Trung bình** | ⏳ Chờ áp dụng code |
-| **4** | Tự động di chuyển về $(240, 0, 50)$ sau khi chu trình Homing phần cứng kết thúc | `dobot_live_server.py`<br>`dobot_visualizer.html` | 🟢 **Tiện ích** | ⏳ Đề xuất nâng cấp |
-| **5** | Lọc tọa độ phôi bằng đa giác lồi 4 điểm Calib Homography (`pointPolygonTest`) | `dobot_auto_sort.py` | 🟢 **Tiện ích** | ⏳ Đề xuất nâng cấp |
+| STT | Hạng mục / Tính năng | File liên quan | Mức độ ưu tiên | Trạng thái |
+| :---: | :--- | :--- | :--- | :---: |
+| **1** | Bổ sung ROI an toàn trên Camera ($140 \le R \le 330\text{ mm}$) & Khóa chặn an toàn | `Object_Detection/dobot_auto_sort.py`<br>`DOBOT/dobot_auto_sort.py` | 🔴 **Cao (High)** | ✅ **ĐÃ HOÀN THÀNH** |
+| **2** | Cảnh báo trực quan OSD đỏ nhấp nháy trên Camera khi phôi ngoài tầm | `dobot_auto_sort.py` | 🟡 **Trung bình** | ✅ **ĐÃ HOÀN THÀNH** |
+| **3** | Tab Dạy Điểm & Chạy Chuỗi (Teach & Playback) đóng vòng phản hồi trên Web 3D | `dobot_visualizer.html`<br>`dist_netlify/index.html` | 🔴 **Cao (High)** | ✅ **ĐÃ HOÀN THÀNH** |
+| **4** | Tab Lập Trình Khối Kéo Thả Trực Quan (Dobot Blockly) | `dobot_visualizer.html`<br>`dist_netlify/index.html` | 🔴 **Cao (High)** | ✅ **ĐÃ HOÀN THÀNH** |
+| **5** | Chế Độ Mô Phỏng 3D Độc Lập khi không có Robot thật (Offline 3D Twin) | `dobot_visualizer.html`<br>`dist_netlify/index.html` | 🔴 **Cao (High)** | ✅ **ĐÃ HOÀN THÀNH** |
+| **6** | Tinh chỉnh & Nâng cấp Giao diện Toàn diện (UI/UX Refinements & Tactile Design) | `dobot_visualizer.html`<br>`dist_netlify/index.html` | 🔴 **Cao (High)** | ✅ **ĐÃ HOÀN THÀNH** |
+| **7** | Trợ Lý Điều Khiển Bằng Giọng Nói Tiếng Việt (Web Speech API) | `dobot_visualizer.html` | 🟢 **Mở rộng** | 📝 Đã lên thiết kế |
+| **8** | Trợ Lý Xếp Pallet & Xếp Chồng Tháp Tự Động (Palletizing Matrix) | `dobot_visualizer.html` | 🟢 **Mở rộng** | 📝 Đã lên thiết kế |
+
+---
+
+## 15. GHI CHÚ THIẾT KẾ CÁC TÍNH NĂNG MỞ RỘNG (PLANNED FEATURE BACKLOG)
+
+### 15.1. Trợ Lý Điều Khiển Giọng Nói Tiếng Việt (Voice Control Assistant)
+- **Chuẩn kỹ thuật:** Web Speech API (`SpeechRecognition` & `SpeechSynthesis`).
+- **Khẩu lệnh mẫu:** *"Về home"*, *"Bật/Tắt giác hút"*, *"Dừng lại"*, *"Lên/Xuống/Tiến/Lùi/Trái/Phải"*, *"Vị trí chờ"*, *"Chạy kịch bản"*, *"Tọa độ hiện tại"*.
+- **Phản hồi âm thanh:** Loa phát tiếng Việt xác nhận hành động tức thì.
+- **Trực quan:** Micro phát sáng neon có hiệu ứng sóng âm thanh khi lắng nghe, phím tắt nhanh `[V]`.
+
+### 15.2. Trợ Lý Xếp Pallet & Xếp Chồng Tháp Tự Động (Palletizing & Stacking Matrix)
+- **Công thức ma trận tọa độ:** $X_{pallet}(i,j,k) = X_0 + i\cdot\Delta X$, $Y_{pallet}(i,j,k) = Y_0 + j\cdot\Delta Y$, $Z_{pallet}(i,j,k) = Z_0 + k\cdot\Delta Z$.
+- **Hỗ trợ 2 chế độ:** Lưới ma trận phẳng ($N \times M \times H$) và Tháp xếp chồng ($1 \times 1 \times H$).
+- **Mô phỏng 3D:** Hiển thị lưới pallet ảo (Ghost Grid) và tạo các khối hộp 3D ảo xuất hiện tại từng ô khi robot đặt xong phôi.
+- **Liên kết:** Chạy trực tiếp từ Wizard, hoặc 1-click xuất sang Tab Dạy Điểm (Teach & Playback) hay Tab Blockly.
+
+### 15.3. Chế Độ Mô Phỏng 3D Hoàn Chỉnh khi Không Cắm Robot Thật (Standalone 3D Simulation)
+- **Vấn đề đã xử lý:** Khi WebSocket server chạy nhưng chưa cắm cáp USB robot, hoặc khi chạy offline trên Netlify/Vercel, kịch bản Blockly & Dạy Điểm từng bị treo 8 giây mỗi bước do chờ telemetry phần cứng.
+- **Giải pháp triển khai:**
+  - Tự động nhận diện `isSimulationMode()` thông minh (chưa cắm USB, server tắt, hoặc người dùng chọn nút `🎮 Mô phỏng (Manual)`).
+  - Tích hợp bộ nội suy thời gian thực `animateRobotCartesian` (Safe Jump 3 pha + Direct PTP) và `animateRobotJoints` với hàm gia tốc mượt mà cubic smoothstep ($s = 3t^2 - 2t^3$).
+  - Đồng bộ liên tục mô hình 3D, tọa độ HUD và các thanh trượt theo thời gian thực (~40 FPS), hỗ trợ tạm dừng, tiếp tục và dừng khẩn cấp tức thì.
+
+### 15.4. Đợt Nâng Cấp Giao Diện Toàn Diện (UI/UX Comprehensive Refinement - v2.2)
+- **Mục tiêu:** Tối ưu hóa công thái học, độ phản hồi và tính thẩm mỹ công nghiệp cho Web 3D Twin.
+- **Các cải tiến đã áp dụng:**
+  1. **Tính năng Thu Gọn / Mở Rộng Bảng Điều Khiển (`togglePanelCollapse`):** Thêm nút `▼ / ▲` trên Header và cho phép nhấp vào tiêu đề để thu nhỏ bảng điều khiển thành một thanh tiêu đề cực gọn, giúp quan sát toàn cảnh không gian 3D mà không bị che khuất trên màn hình nhỏ.
+  2. **Chống tràn màn hình di động (<400px):** Bổ sung `max-width: calc(100vw - 30px);` và thanh cuộn ngang ẩn mượt mà cho `.nav-tabs`, đảm bảo giao diện hiển thị hoàn hảo trên điện thoại và máy tính bảng.
+  3. **Thanh Tab 5 chế độ dạng Viên nang (Pill Tabs):** Hiệu ứng chuyển động phát sáng gradient mượt mà (`#1971c2` $\to$ `#228be6`), độ nhạy hover cao, không bị gãy dòng chữ tiếng Việt.
+  4. **Nhận diện trạng thái Twin thông minh (`#status-badge`):** Khi chuyển sang chế độ mô phỏng hoặc chưa cắm phần cứng, badge chuyển sang tông màu Cam/Cyan tinh tế `🎮 Đang chạy mô phỏng 3D độc lập` kèm nhịp xung nhịp (pulse animation), xoá bỏ cảm giác "bị lỗi" trước đây.
+  5. **Bộ phím Jog công nghiệp xúc giác (Tactile 3D Buttons):** Nâng cấp đổ bóng 3D cơ học, hiệu ứng lún phím khi nhấn (`transform: translateY(1px)`), làm nổi bật phím trục $Z$ và phím Dừng khẩn cấp.
+  6. **Thẻ Dạy Điểm trực quan (`renderTeachList`):** Tích hợp huy hiệu số thứ tự bước `#1, #2` dạng pill, viền màu phân biệt kiểu di chuyển (`type-safe` viền xanh, `type-direct` viền cam) và hiệu ứng phát sáng xanh lá nhấp nháy khi bước đang chạy.
+  7. **Không gian Blockly co giãn thông minh & Nút Sao Chép:** Chiều cao `#blockly-wrapper` co giãn linh hoạt theo tỷ lệ màn hình `clamp(280px, 46vh, 420px)`; bổ sung nút **📋 Sao Chép** mã Python/JS 1-click vào clipboard.
+  8. **Nút Dừng Khẩn Cấp Toàn Cục trên Footer:** Nút `🛑 Dừng` (`.btn-estop`) cho phép ngắt mọi hoạt động ngay tức khắc từ bất kỳ Tab nào.
+  9. **Nhãn 3D HUD Kính Mờ (Glassmorphism):** Tọa độ đầu hút TCP và cọc tiêu đích 3D bo tròn dạng pill, nền kính mờ (`backdrop-filter: blur(8px)`) và viền neon phát sáng.
+- **Kết quả kiểm thử:** Đạt **171/171 Test Cases (100% Pass)** trên 6 bộ kiểm thử tự động.
+
+

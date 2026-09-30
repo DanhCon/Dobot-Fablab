@@ -5,19 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dobot Magician 3D Cartesian & Joint Twin</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; background: #14171d; color: #fff; }
+        body {
+            margin: 0; padding: 0; overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+            background: #10141d;
+            color: #f8fafc;
+        }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; }
         #panel {
             position: absolute; top: 15px; left: 15px; width: 380px;
-            background: rgba(18, 22, 31, 0.94); backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.08);
+            max-width: calc(100vw - 30px);
+            background: #111520;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 14px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.05);
             font-size: 13px; z-index: 10;
             display: flex; flex-direction: column;
             max-height: calc(100vh - 30px);
             overflow: hidden;
             box-sizing: border-box;
-            transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), max-height 0.25s ease;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        #panel.panel-collapsed {
+            max-height: 52px !important;
+            overflow: hidden !important;
+        }
+        #panel.panel-collapsed .panel-body,
+        #panel.panel-collapsed .panel-footer,
+        #panel.panel-collapsed .mode-toggle,
+        #panel.panel-collapsed .nav-tabs,
+        #panel.panel-collapsed #status-badge,
+        #panel.panel-collapsed #alarm-banner {
+            display: none !important;
         }
         #panel.panel-expanded {
             width: 630px;
@@ -29,18 +53,20 @@
         }
         .panel-header {
             padding: 12px 14px 10px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-            background: rgba(13, 16, 23, 0.55);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: #0d111a;
             flex-shrink: 0;
         }
         .panel-title {
             font-size: 13.5px; font-weight: 800; letter-spacing: 0.5px;
             display: flex; align-items: center; gap: 6px;
+            user-select: none;
+            color: #ffffff;
         }
         .btn-config-gear {
-            background: #232731; border: 1px solid #444; color: #adb5bd;
+            background: #232731; border: 1px solid #4a5568; color: #e2e8f0;
             border-radius: 6px; padding: 3px 8px; font-size: 12px; cursor: pointer;
-            transition: 0.2s;
+            transition: 0.2s; font-weight: 600;
         }
         .btn-config-gear:hover {
             background: #339af0; color: #fff; border-color: #339af0;
@@ -48,35 +74,51 @@
         
         .status-badge {
             display: flex; align-items: center; justify-content: center; gap: 8px;
-            padding: 5px 10px; border-radius: 20px; font-weight: 600; font-size: 11.5px;
-            background: #2b303c; border: 1px solid #444;
+            padding: 5px 10px; border-radius: 20px; font-weight: 700; font-size: 11.5px;
+            background: #222734; border: 1px solid #475569; transition: all 0.25s ease;
         }
-        .status-badge.live { background: rgba(46, 213, 115, 0.18); border-color: #2ed573; color: #2ed573; }
-        .status-badge.offline { background: rgba(255, 71, 87, 0.18); border-color: #ff4757; color: #ff4757; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+        .status-badge.live { background: rgba(46, 213, 115, 0.22); border-color: #2ed573; color: #2ed573; box-shadow: 0 0 10px rgba(46, 213, 115, 0.25); }
+        .status-badge.offline { background: rgba(255, 71, 87, 0.22); border-color: #ff4757; color: #ff6b6b; }
+        .status-badge.simulation { background: rgba(255, 146, 43, 0.22); border-color: #ff922b; color: #ffaa40; box-shadow: 0 0 10px rgba(255, 146, 43, 0.3); }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: currentColor;
+            box-shadow: 0 0 6px currentColor;
+            animation: status-pulse 2s infinite ease-in-out;
+        }
+        @keyframes status-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.55; transform: scale(0.85); }
+        }
 
         .mode-toggle {
-            display: flex; background: #1a1e27; border-radius: 8px; padding: 2px;
+            display: flex; background: #181d27; border-radius: 8px; padding: 2px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
         }
         .mode-btn {
             flex: 1; padding: 6px; text-align: center; border: none; background: transparent;
-            color: #888; font-weight: 600; border-radius: 6px; cursor: pointer; transition: 0.2s; font-size: 11.5px;
+            color: #cbd5e1; font-weight: 700; border-radius: 6px; cursor: pointer; transition: 0.2s; font-size: 11.5px;
         }
-        .mode-btn.active { background: #339af0; color: #fff; }
+        .mode-btn.active { background: #339af0; color: #ffffff; }
 
         .nav-tabs {
-            display: flex; background: rgba(0, 0, 0, 0.35); border-radius: 8px;
+            display: flex; background: rgba(0, 0, 0, 0.55); border-radius: 8px;
             padding: 3px; margin-top: 8px; gap: 3px;
+            overflow-x: auto; scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+            border: 1px solid rgba(255, 255, 255, 0.06);
         }
+        .nav-tabs::-webkit-scrollbar { display: none; }
         .nav-tab {
-            flex: 1; padding: 6px 3px; text-align: center; border: none; background: transparent;
-            color: #94a3b8; font-weight: 600; font-size: 11px; border-radius: 6px;
-            cursor: pointer; transition: 0.15s; display: flex; align-items: center; justify-content: center; gap: 3px;
-            white-space: nowrap;
+            flex: 1; min-width: 62px; padding: 6px 3px; text-align: center; border: none; background: transparent;
+            color: #cbd5e1; font-weight: 700; font-size: 11.5px; border-radius: 6px;
+            cursor: pointer; transition: all 0.15s ease; display: flex; align-items: center; justify-content: center; gap: 3px;
+            white-space: nowrap; user-select: none;
         }
-        .nav-tab:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+        .nav-tab:hover { color: #ffffff; background: rgba(255, 255, 255, 0.12); }
         .nav-tab.active {
-            background: #1c7ed6; color: #fff; box-shadow: 0 2px 6px rgba(28, 126, 214, 0.4);
+            background: linear-gradient(135deg, #1971c2 0%, #228be6 100%);
+            color: #ffffff; font-weight: 800;
+            box-shadow: 0 2px 8px rgba(28, 126, 214, 0.45);
         }
 
         .panel-body {
@@ -88,18 +130,19 @@
         .panel-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
 
         .panel-footer {
-            padding: 10px 14px;
+            padding: 9px 12px;
             border-top: 1px solid rgba(255, 255, 255, 0.08);
-            background: rgba(13, 16, 23, 0.7);
-            display: flex; gap: 6px;
+            background: rgba(13, 16, 23, 0.85);
+            display: flex; gap: 5px;
             flex-shrink: 0;
         }
         .btn-footer {
-            flex: 1; padding: 7px 5px; border-radius: 8px; font-weight: 700;
-            font-size: 11px; cursor: pointer; transition: 0.2s; border: 1px solid #444;
+            flex: 1; padding: 7px 4px; border-radius: 8px; font-weight: 700;
+            font-size: 11px; cursor: pointer; transition: all 0.15s ease; border: 1px solid #444;
             display: flex; align-items: center; justify-content: center; gap: 4px;
-            white-space: nowrap;
+            white-space: nowrap; user-select: none;
         }
+        .btn-footer:active { transform: translateY(1px); }
         .btn-clear-alarm {
             background: #2b303c; color: #ff8787; border-color: rgba(255, 107, 107, 0.4);
         }
@@ -122,33 +165,41 @@
             background: #ff922b; color: #000; border-color: #ff922b;
             box-shadow: 0 0 10px rgba(255, 146, 43, 0.4);
         }
+        .btn-estop {
+            background: rgba(224, 49, 49, 0.2); color: #ff8787; border-color: rgba(255, 107, 107, 0.4);
+        }
+        .btn-estop:hover {
+            background: #e03131; color: #fff; border-color: #ff6b6b;
+            box-shadow: 0 0 10px rgba(224, 49, 49, 0.5);
+        }
 
         .sub-toggle {
-            display: flex; background: rgba(0, 0, 0, 0.35); border-radius: 6px;
-            padding: 2px; margin-bottom: 8px;
+            display: flex; background: rgba(0, 0, 0, 0.45); border-radius: 6px;
+            padding: 2px; margin-bottom: 8px; border: 1px solid rgba(255, 255, 255, 0.06);
         }
         .sub-btn {
             flex: 1; padding: 5px; text-align: center; border: none; background: transparent;
-            color: #94a3b8; font-weight: 600; font-size: 11px; border-radius: 5px; cursor: pointer; transition: 0.15s;
+            color: #cbd5e1; font-weight: 700; font-size: 11.5px; border-radius: 5px; cursor: pointer; transition: 0.15s;
         }
-        .sub-btn:hover { color: #fff; }
+        .sub-btn:hover { color: #ffffff; }
         .sub-btn.active {
-            background: #2b303c; color: #4dabf7; font-weight: 700;
+            background: #2b303c; color: #60a5fa; font-weight: 800;
         }
 
         .coord-toggle {
-            display: flex; background: #2b303c; border-radius: 6px; padding: 2px; margin-bottom: 8px;
+            display: flex; background: #222734; border-radius: 6px; padding: 2px; margin-bottom: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
         }
         .coord-btn {
             flex: 1; padding: 5px; text-align: center; border: none; background: transparent;
-            color: #bbb; font-weight: 600; font-size: 11px; border-radius: 5px; cursor: pointer;
+            color: #cbd5e1; font-weight: 700; font-size: 11.5px; border-radius: 5px; cursor: pointer;
         }
-        .coord-btn.active { background: #ff922b; color: #000; }
+        .coord-btn.active { background: #ff922b; color: #000; font-weight: 800; }
 
         .control-group { margin-bottom: 7px; }
-        .control-group label { display: flex; justify-content: space-between; margin-bottom: 3px; font-weight: 500; font-size: 12px; }
+        .control-group label { display: flex; justify-content: space-between; margin-bottom: 3px; font-weight: 600; font-size: 12px; color: #f1f5f9; }
         input[type=range] { width: 100%; accent-color: #339af0; cursor: pointer; }
-        select { width: 100%; padding: 6px 8px; border-radius: 6px; background: #2b2f3a; color: #fff; border: 1px solid #444; margin-top: 3px; font-size: 12px; }
+        select { width: 100%; padding: 6px 8px; border-radius: 6px; background: #222734; color: #ffffff; border: 1px solid #4a5568; margin-top: 3px; font-size: 12px; font-weight: 600; }
         
         .jog-section {
             background: rgba(30, 34, 45, 0.7); border: 1px solid rgba(255,255,255,0.08);
@@ -159,30 +210,48 @@
         }
         .btn-step {
             padding: 3px 7px; border-radius: 4px; border: 1px solid #495057;
-            background: #232731; color: #adb5bd; font-size: 11px; cursor: pointer; transition: 0.15s;
+            background: #232731; color: #e2e8f0; font-size: 11px; font-weight: 600; cursor: pointer; transition: 0.15s;
         }
-        .btn-step:hover { background: #343a40; color: #fff; }
+        .btn-step:hover { background: #343a40; color: #ffffff; }
         .btn-step.active {
-            background: #2f9e44; color: #fff; border-color: #40c057; font-weight: bold;
+            background: #2f9e44; color: #ffffff; border-color: #40c057; font-weight: 800;
         }
 
         .jog-grid {
             display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 4px;
         }
         .btn-jog {
-            padding: 8px 0; border: 1px solid #495057; border-radius: 6px; background: #2b303c;
-            color: #fff; font-weight: bold; cursor: pointer; font-size: 11.5px; text-align: center; transition: 0.15s;
+            padding: 8px 0; border: 1px solid #495057; border-radius: 6px;
+            background: linear-gradient(180deg, #2e3442 0%, #232733 100%);
+            color: #f1f5f9; font-weight: 700; cursor: pointer; font-size: 11.5px;
+            text-align: center; transition: all 0.12s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            user-select: none;
         }
-        .btn-jog:hover { background: #3a4254; border-color: #339af0; }
-        .btn-jog:active { transform: scale(0.96); }
+        .btn-jog:hover {
+            background: linear-gradient(180deg, #384257 0%, #2a3142 100%);
+            border-color: #339af0; color: #fff;
+            box-shadow: 0 2px 8px rgba(51, 154, 240, 0.3);
+        }
+        .btn-jog:active {
+            transform: translateY(1px);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
         .btn-jog-z {
-            background: #1864ab !important; border-color: #339af0 !important; color: #fff !important; font-weight: 800 !important;
+            background: linear-gradient(180deg, #1971c2 0%, #155799 100%) !important;
+            border-color: #339af0 !important; color: #fff !important; font-weight: 800 !important;
         }
-        .btn-jog-z:hover { background: #1c7ed6 !important; }
+        .btn-jog-z:hover {
+            background: linear-gradient(180deg, #228be6 0%, #1971c2 100%) !important;
+        }
         .btn-jog-stop {
-            background: #c92a2a !important; border-color: #ff6b6b !important; color: #fff !important;
+            background: linear-gradient(180deg, #e03131 0%, #b02525 100%) !important;
+            border-color: #ff6b6b !important; color: #fff !important; font-weight: 800 !important;
+            box-shadow: 0 0 8px rgba(255, 107, 107, 0.35) !important;
         }
-        .btn-jog-stop:hover { background: #e03131 !important; }
+        .btn-jog-stop:hover {
+            background: linear-gradient(180deg, #fa5252 0%, #c92a2a 100%) !important;
+        }
 
         .slider-row {
             display: flex; align-items: center; gap: 6px;
@@ -206,7 +275,7 @@
         .badge-val { color: #51cf66; font-weight: bold; font-family: monospace; font-size: 12px; }
 
         .auto-send-box {
-            display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11.5px; color: #adb5bd;
+            display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 11.5px; color: #cbd5e1; font-weight: 600;
         }
         .auto-send-box input { accent-color: #2f9e44; cursor: pointer; }
 
@@ -236,23 +305,23 @@
             display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 6px;
         }
         .coord-field {
-            display: flex; align-items: center; background: #232731; border: 1px solid #444;
+            display: flex; align-items: center; background: #232731; border: 1px solid #4a5568;
             border-radius: 6px; overflow: hidden; padding: 2px 6px;
         }
         .coord-tag {
-            font-weight: 800; font-size: 11px; width: 18px; text-align: center;
+            font-weight: 800; font-size: 11.5px; width: 18px; text-align: center;
         }
         .tag-x { color: #ff6b6b; }
         .tag-y { color: #51cf66; }
         .tag-z { color: #339af0; }
         .tag-r { color: #ffd43b; }
         .coord-field input {
-            width: 100%; background: transparent; border: none; color: #fff;
-            font-family: monospace; font-size: 13px; font-weight: bold; text-align: right;
+            width: 100%; background: transparent; border: none; color: #ffffff;
+            font-family: 'Consolas', monospace; font-size: 13.5px; font-weight: 800; text-align: right;
             padding: 3px; outline: none;
         }
         .coord-unit {
-            font-size: 10px; color: #888; margin-left: 4px;
+            font-size: 11px; color: #cbd5e1; font-weight: 700; margin-left: 4px;
         }
         .reach-badge {
             padding: 4px 8px; border-radius: 4px; font-size: 11px; margin-top: 6px; text-align: center;
@@ -274,23 +343,25 @@
             display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; margin-top: 4px;
         }
         .btn-preset {
-            padding: 5px 6px; background: #2b303c; border: 1px solid #444; border-radius: 4px;
-            color: #ccc; font-size: 11px; cursor: pointer; text-align: center; transition: 0.15s; font-weight: 500;
+            padding: 5px 6px; background: #232731; border: 1px solid #4a5568; border-radius: 4px;
+            color: #f1f5f9; font-size: 11px; cursor: pointer; text-align: center; transition: 0.15s; font-weight: 600;
         }
-        .btn-preset:hover { background: #343a40; border-color: #ff922b; color: #fff; }
+        .btn-preset:hover { background: #334155; border-color: #ff922b; color: #ffffff; }
 
         .theme-select { margin-top: 10px; display: flex; gap: 6px; }
         .btn-theme {
-            flex: 1; padding: 5px; font-size: 11px; background: #232731; border: 1px solid #444; color: #ccc; border-radius: 5px; cursor: pointer;
+            flex: 1; padding: 5px; font-size: 11.5px; font-weight: 600; background: #232731; border: 1px solid #4a5568; color: #cbd5e1; border-radius: 5px; cursor: pointer;
         }
-        .btn-theme.active { background: #1c7ed6; color: #fff; border-color: #339af0; }
+        .btn-theme.active { background: #1c7ed6; color: #ffffff; border-color: #339af0; font-weight: 700; }
 
-        .note { font-size: 11px; color: #888; margin-top: 8px; line-height: 1.4; text-align: center; }
+        .note { font-size: 11.5px; color: #cbd5e1; margin-top: 8px; line-height: 1.4; text-align: center; font-weight: 500; }
         
         #hud-label {
-            position: absolute; color: #fff; font-family: monospace; font-size: 11.5px; font-weight: bold;
-            background: rgba(0, 0, 0, 0.75); border: 1px solid #ff922b; padding: 3px 7px; border-radius: 5px;
+            position: absolute; color: #ffffff; font-family: 'Consolas', monospace; font-size: 12px; font-weight: 800;
+            background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            border: 1.5px solid #ff922b; padding: 4px 10px; border-radius: 20px;
             pointer-events: none; transform: translate(-50%, -130%); z-index: 5; white-space: nowrap;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.7), 0 0 10px rgba(255, 146, 43, 0.4);
         }
 
         #toast-container {
@@ -301,7 +372,7 @@
             background: rgba(20, 24, 33, 0.95); border: 1px solid #51cf66; color: #51cf66;
             padding: 9px 15px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
             box-shadow: 0 6px 20px rgba(0,0,0,0.6); transition: opacity 0.3s, transform 0.3s;
-            font-family: 'Segoe UI', Arial, sans-serif; pointer-events: auto;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; pointer-events: auto;
         }
         .btn-click-pick {
             width: 100%;
@@ -343,9 +414,9 @@
             gap: 3px;
         }
         .click-hint {
-            font-size: 10.5px;
-            color: #999;
-            line-height: 1.3;
+            font-size: 11px;
+            color: #cbd5e1;
+            line-height: 1.35;
         }
         .canvas-picking {
             cursor: crosshair !important;
@@ -378,10 +449,32 @@
             border-color: rgba(255, 255, 255, 0.2);
             background: rgba(30, 36, 52, 0.95);
         }
+        .teach-step-pill {
+            display: inline-block;
+            background: rgba(56, 189, 248, 0.2);
+            color: #38bdf8;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 1px 6px;
+            border-radius: 10px;
+            border: 1px solid rgba(56, 189, 248, 0.4);
+        }
+        .teach-card.type-safe {
+            border-left: 3px solid #38bdf8;
+        }
+        .teach-card.type-direct {
+            border-left: 3px solid #f59f00;
+        }
         .teach-card.active-step {
             border-color: #22c55e !important;
-            background: rgba(34, 197, 94, 0.15) !important;
-            box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+            border-left-color: #22c55e !important;
+            background: rgba(34, 197, 94, 0.18) !important;
+            box-shadow: 0 0 14px rgba(34, 197, 94, 0.5) !important;
+            animation: pulse-step 1.2s infinite ease-in-out;
+        }
+        @keyframes pulse-step {
+            0%, 100% { box-shadow: 0 0 6px rgba(34, 197, 94, 0.3); }
+            50% { box-shadow: 0 0 16px rgba(34, 197, 94, 0.7); }
         }
         .btn-teach-action {
             background: #232731; border: 1px solid #495057; color: #cbd5e1;
@@ -462,9 +555,9 @@
             border-radius: 6px; padding: 4px 5px; font-size: 10px; color: #cbd5e1;
         }
         .tip-banner {
-            font-size: 10.5px; color: #94a3b8; background: rgba(51, 154, 240, 0.08);
-            border: 1px dashed rgba(51, 154, 240, 0.25); border-radius: 6px; padding: 5px 8px;
-            margin-bottom: 6px; text-align: center; line-height: 1.35;
+            font-size: 11.5px; color: #7dd3fc; background: rgba(14, 116, 144, 0.18);
+            border: 1px dashed rgba(56, 189, 248, 0.4); border-radius: 6px; padding: 5px 8px;
+            margin-bottom: 6px; text-align: center; line-height: 1.35; font-weight: 600;
         }
 
         .data-grid-2col {
@@ -475,24 +568,26 @@
             display: flex; justify-content: space-between; align-items: center;
             font-family: monospace; font-size: 11.5px; border: 1px solid rgba(255,255,255,0.05);
         }
-        .data-metric .lbl { color: #94a3b8; font-weight: 600; }
+        .data-metric .lbl { color: #93c5fd; font-weight: 700; }
 
         #beacon-hud {
             position: absolute;
             display: none;
             pointer-events: none;
             z-index: 10;
-            background: rgba(15, 23, 42, 0.88);
-            border: 1px solid #51cf66;
-            color: #51cf66;
-            padding: 3px 8px;
-            border-radius: 6px;
-            font-family: monospace;
-            font-size: 11px;
-            font-weight: bold;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1.5px solid #22c55e;
+            color: #4ade80;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            font-weight: 800;
             transform: translate(-50%, -150%);
             white-space: nowrap;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+            box-shadow: 0 4px 14px rgba(0,0,0,0.7), 0 0 10px rgba(34, 197, 94, 0.4);
         }
         /* Blockly Dark Theme Customizations */
         .blocklyToolboxDiv {
@@ -509,10 +604,10 @@
             fill: #141822 !important;
         }
         .blocklyTreeLabel {
-            color: #94a3b8 !important;
-            font-size: 11px !important;
-            font-weight: 600 !important;
-            font-family: 'Segoe UI', Arial, sans-serif !important;
+            color: #e2e8f0 !important;
+            font-size: 12px !important;
+            font-weight: 700 !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
         }
         .blocklyTreeRow {
             padding: 3px 6px !important;
@@ -586,10 +681,13 @@
         <!-- 1. FIXED HEADER -->
         <div class="panel-header">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div class="panel-title">
+                <div class="panel-title" onclick="togglePanelCollapse()" style="cursor: pointer;" title="Nhấp để thu gọn / mở rộng bảng điều khiển">
                     <span style="color: #339af0;">⚡ DOBOT</span> <span>MAGICIAN 3D</span>
                 </div>
-                <button class="btn-config-gear" onclick="configureServerUrl()" title="Cấu hình địa chỉ Server (Netlify / Remote)">⚙️</button>
+                <div style="display: flex; align-items: center; gap: 5px;">
+                    <button class="btn-config-gear" onclick="configureServerUrl()" title="Cấu hình địa chỉ Server (Netlify / Remote)">⚙️</button>
+                    <button id="btn-panel-minimize" class="btn-config-gear" onclick="togglePanelCollapse()" title="Thu gọn / Mở rộng bảng điều khiển">▼</button>
+                </div>
             </div>
 
             <!-- Status badge -->
@@ -681,7 +779,7 @@
                     <button class="btn-action btn-direct-ptp" onclick="executeGoToPoint('direct')" title="Bay thẳng trực tiếp tới điểm">🚀 Bay Thẳng (Direct)</button>
                 </div>
 
-                <div style="font-size: 11px; color: #94a3b8; margin-top: 10px; margin-bottom: 5px; font-weight: 600;">⚡ ĐIỂM MẪU NHANH:</div>
+                <div style="font-size: 11.5px; color: #38bdf8; margin-top: 10px; margin-bottom: 5px; font-weight: 700;">⚡ ĐIỂM MẪU NHANH:</div>
                 <div class="preset-grid">
                     <button class="btn-preset" onclick="setTargetPreset(240, 0, 50, 0)">🏠 Home (240, 0, 50)</button>
                     <button class="btn-preset" onclick="setTargetPreset(220, 120, 20, 0)">📦 Lấy Hàng (A)</button>
@@ -701,7 +799,7 @@
                 <!-- 1. JOG VIEW -->
                 <div id="jog-view">
                     <div class="step-selector">
-                        <span style="font-weight: 600; color: #94a3b8; font-size: 11px;">Bước di chuyển:</span>
+                        <span style="font-weight: 700; color: #f1f5f9; font-size: 11.5px;">Bước di chuyển:</span>
                         <div style="display: flex; gap: 3px;">
                             <button class="btn-step" data-step="1" onclick="setJogStep(1)">1mm</button>
                             <button class="btn-step" data-step="5" onclick="setJogStep(5)">5mm</button>
@@ -840,7 +938,7 @@
                 <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 8px; margin-bottom: 10px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                         <span style="font-weight: 700; font-size: 11.5px; color: #f1f5f9;">🎮 BỘ ĐIỀU KHIỂN CHẠY</span>
-                        <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: #94a3b8; cursor: pointer;">
+                        <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: #cbd5e1; cursor: pointer; font-weight: 600;">
                             <input type="checkbox" id="chk-playback-loop" onchange="togglePlaybackLoop(this.checked)">
                             <span>🔁 Lặp liên tục</span>
                         </label>
@@ -856,7 +954,7 @@
                             ⏹️ Dừng
                         </button>
                     </div>
-                    <div id="playback-status-bar" style="margin-top: 6px; font-size: 11px; color: #94a3b8; text-align: center; background: rgba(0,0,0,0.25); padding: 4px; border-radius: 4px;">
+                    <div id="playback-status-bar" style="margin-top: 6px; font-size: 11px; color: #f1f5f9; text-align: center; background: rgba(0,0,0,0.35); padding: 4px; border-radius: 4px; font-weight: 600;">
                         Trạng thái: Sẵn sàng
                     </div>
                 </div>
@@ -907,14 +1005,14 @@
                 </div>
 
                 <!-- Thanh thông thái chạy -->
-                <div id="blockly-status-bar" style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 5px 8px; font-size: 11px; color: #94a3b8; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; min-height: 18px;">
-                    <span id="blockly-status-dot" style="width: 7px; height: 7px; border-radius: 50%; background: #94a3b8; display: inline-block;"></span>
+                <div id="blockly-status-bar" style="background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 5px 8px; font-size: 11px; color: #f1f5f9; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; min-height: 18px;">
+                    <span id="blockly-status-dot" style="width: 7px; height: 7px; border-radius: 50%; background: #38bdf8; display: inline-block;"></span>
                     <span id="blockly-status-text">Sẵn sàng kéo thả hoặc chọn kịch bản mẫu</span>
                 </div>
 
                 <!-- Chọn Kịch bản Mẫu nhanh -->
                 <div style="display: flex; gap: 4px; margin-bottom: 8px; align-items: center;">
-                    <label style="font-size: 11px; color: #94a3b8; font-weight: 600; white-space: nowrap;">⚡ Mẫu sẵn:</label>
+                    <label style="font-size: 11.5px; color: #38bdf8; font-weight: 700; white-space: nowrap;">⚡ Mẫu sẵn:</label>
                     <select id="sel-blockly-preset" style="flex: 1; background: #1e2430; color: #fff; border: 1px solid #444; border-radius: 6px; padding: 4px 6px; font-size: 11px; outline: none;" onchange="loadBlocklyPreset(this.value)">
                         <option value="pick_and_place">📦 Gắp & Thả Phôi 3 Lần (For Loop)</option>
                         <option value="square_patrol">🔄 Tuần Tra 4 Góc Bàn (Patrol)</option>
@@ -923,7 +1021,7 @@
                 </div>
 
                 <!-- Khung chứa Workspace Blockly -->
-                <div id="blockly-wrapper" style="position: relative; width: 100%; height: 380px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); overflow: hidden; background: #151922;">
+                <div id="blockly-wrapper" style="position: relative; width: 100%; height: clamp(280px, 46vh, 420px); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); overflow: hidden; background: #151922; box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);">
                     <div id="blocklyDiv" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0;"></div>
                 </div>
 
@@ -951,11 +1049,12 @@
                             💻 MÃ NGUỒN SINH RA
                         </span>
                         <div style="display: flex; gap: 4px; align-items: center;">
+                            <button id="btn-copy-code" class="btn-step" style="padding: 2px 7px; font-size: 10px; background: rgba(56,189,248,0.15); border-color: rgba(56,189,248,0.3); color: #38bdf8;" onclick="event.stopPropagation(); copyBlocklyCodeToClipboard()" title="Sao chép toàn bộ mã ra bộ nhớ tạm">📋 Sao Chép</button>
                             <div class="mode-toggle" style="padding: 1px; margin: 0;" onclick="event.stopPropagation()">
                                 <button id="btn-code-py" class="mode-btn active" style="padding: 2px 7px; font-size: 10px;" onclick="switchBlocklyCodeLang('python')">Python</button>
                                 <button id="btn-code-js" class="mode-btn" style="padding: 2px 7px; font-size: 10px;" onclick="switchBlocklyCodeLang('javascript')">JavaScript</button>
                             </div>
-                            <span id="drawer-arrow" style="font-size: 10px; color: #888;">▼</span>
+                            <span id="drawer-arrow" style="font-size: 10px; color: #cbd5e1;">▼</span>
                         </div>
                     </div>
                     <div id="blockly-code-container" style="display: none; margin-top: 6px;">
@@ -1057,7 +1156,7 @@
                 </div>
 
                 <div class="control-group" style="margin-top: 10px;">
-                    <label style="color: #94a3b8; font-size: 11px;">Công cụ đầu cuối (End-Effector):</label>
+                    <label style="color: #f1f5f9; font-size: 11.5px; font-weight: 600;">Công cụ đầu cuối (End-Effector):</label>
                     <select id="tool-select">
                         <option value="suction">Giác hút khí nén (Suction: -59.5mm)</option>
                         <option value="gripper">Tay kẹp khí nén (Gripper: -68.0mm)</option>
@@ -1066,9 +1165,9 @@
                 </div>
 
                 <div class="control-group" style="margin-top: 10px;">
-                    <label style="color: #94a3b8; font-size: 11px;">Hiệu chuẩn gốc (Zero / Homing Calibration):</label>
+                    <label style="color: #f1f5f9; font-size: 11.5px; font-weight: 600;">Hiệu chuẩn gốc (Zero / Homing Calibration):</label>
                     <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px; margin-top: 4px;">
-                        <div style="font-size: 11px; color: #adb5bd; line-height: 1.4; margin-bottom: 6px;">
+                        <div style="font-size: 11.5px; color: #cbd5e1; line-height: 1.4; margin-bottom: 6px;">
                             Đưa các khớp về chạm cảm biến quang học để xác định mốc tọa độ tuyệt đối (Nên chạy khi mới bật nguồn).
                         </div>
                         <button class="btn-action" style="width: 100%; background: #1864ab; border-color: #339af0; padding: 7px; font-weight: 700; color: #fff;" onclick="triggerHoming()">
@@ -1078,7 +1177,7 @@
                 </div>
 
                 <div class="control-group" style="margin-top: 10px;">
-                    <label style="color: #94a3b8; font-size: 11px;">Chủ đề không gian 3D:</label>
+                    <label style="color: #f1f5f9; font-size: 11.5px; font-weight: 600;">Chủ đề không gian 3D:</label>
                     <div class="theme-select" style="margin-top: 4px;">
                         <button id="btn-sim-theme" class="btn-theme active" onclick="switchTheme('sim')">🌿 Simulator</button>
                         <button id="btn-dark-theme" class="btn-theme" onclick="switchTheme('dark')">🌌 Studio Dark</button>
@@ -1102,6 +1201,9 @@
             <button id="btn-suction" class="btn-footer btn-suction-toggle" onclick="toggleSuction()">
                 💨 Giác Hút
             </button>
+            <button class="btn-footer btn-estop" onclick="sendAction('emergency_stop')" title="Dừng khẩn cấp mọi hoạt động">
+                🛑 Dừng
+            </button>
         </div>
     </div>
 
@@ -1115,6 +1217,7 @@
         
         let toolOffset = 59.5;
         let currentMode = "live";
+        let isRobotHardwareConnected = false;
         let coordSystem = "cartesian";
         let isSuctionOn = false;
         let currentToolType = "suction";
@@ -1124,6 +1227,13 @@
         let isInteractingWithSliders = false;
         let lastRawJoints = { j1: 0, j2: 0, j3: 0, j4: 0 };
         let jogStep = 10;
+
+        function isSimulationMode() {
+            if (currentMode === 'manual') return true;
+            if (!isRobotHardwareConnected) return true;
+            if (!ws || ws.readyState !== WebSocket.OPEN) return true;
+            return false;
+        }
 
         // --- Three.js Setup ---
         const container = document.getElementById('canvas-container');
@@ -1628,6 +1738,10 @@
 
             lastRawJoints = { j1: j1Deg, j2: j2Deg, j3: j3Deg, j4: j4Deg };
             currentX = x; currentY = y; currentZ = zTcp; currentR = rDeg;
+            lastKnownRobotPose = {
+                x: x, y: y, z: zRobot, r: rDeg, zTcp: zTcp,
+                j1: j1Deg, j2: j2Deg, j3: j3Deg, j4: j4Deg
+            };
 
             document.getElementById('tcp-x').innerText = x.toFixed(2) + ' mm';
             document.getElementById('tcp-y').innerText = y.toFixed(2) + ' mm';
@@ -1642,8 +1756,8 @@
             document.getElementById('tcp-dist3d').innerText = dist3D.toFixed(2) + ' mm';
             document.getElementById('tcp-floor').innerText = floorHeight.toFixed(2) + ' mm';
 
-            // Cập nhật giá trị hiển thị trên thanh trượt khi ở Live mode và người dùng không đang giữ chuột kéo
-            if (currentMode === 'live' && !isInteractingWithSliders) {
+            // Cập nhật giá trị hiển thị trên thanh trượt khi ở Live mode hoặc Simulation mode và người dùng không đang giữ chuột kéo
+            if ((currentMode === 'live' || isSimulationMode()) && !isInteractingWithSliders) {
                 document.getElementById('cart-x').value = x;
                 document.getElementById('cart-y').value = y;
                 document.getElementById('cart-z').value = zTcp;
@@ -1689,14 +1803,130 @@
             updateHudLabel(tcpWorldPos, x, y, zTcp);
         }
 
+        // ========================================================
+        // BỘ NỘI SUY CHUYỂN ĐỘNG 3D THỜI GIAN THỰC (3D ANIMATION ENGINE)
+        // ========================================================
+        async function animateRobotCartesian(targetX, targetY, targetZ_TCP, targetR, mode='direct', totalDurationMs=500, checkActive=null, isPaused=null) {
+            const startX = (currentX !== undefined && !isNaN(currentX)) ? currentX : ((lastKnownRobotPose && lastKnownRobotPose.x) || 250);
+            const startY = (currentY !== undefined && !isNaN(currentY)) ? currentY : ((lastKnownRobotPose && lastKnownRobotPose.y) || 0);
+            const startZ = (currentZ !== undefined && !isNaN(currentZ)) ? currentZ : ((lastKnownRobotPose && lastKnownRobotPose.zTcp !== undefined) ? lastKnownRobotPose.zTcp : 50);
+            const startR = (currentR !== undefined && !isNaN(currentR)) ? currentR : ((lastKnownRobotPose && lastKnownRobotPose.r) || 0);
+
+            function easeInOut(t) {
+                return t * t * (3 - 2 * t);
+            }
+
+            const stepMs = 25; // ~40 FPS
+            const steps = Math.max(6, Math.round(totalDurationMs / stepMs));
+
+            // Safe jump safe height
+            let zSafe = Math.max(startZ, targetZ_TCP) + 35;
+            if (zSafe > 140) zSafe = 140;
+            if (zSafe < 30) zSafe = 30;
+
+            for (let step = 1; step <= steps; step++) {
+                if (checkActive && !checkActive()) return false;
+                while (isPaused && isPaused()) {
+                    if (checkActive && !checkActive()) return false;
+                    await sleepMs(50);
+                }
+
+                const t = step / steps;
+                let curX, curY, curZ, curR;
+
+                if (mode === 'safe') {
+                    // 3-phase trajectory: Lift (0 -> 0.28), Traverse (0.28 -> 0.72), Lower (0.72 -> 1.0)
+                    if (t <= 0.28) {
+                        const u = easeInOut(t / 0.28);
+                        curX = startX;
+                        curY = startY;
+                        curR = startR;
+                        curZ = startZ + u * (zSafe - startZ);
+                    } else if (t <= 0.72) {
+                        const u = easeInOut((t - 0.28) / (0.72 - 0.28));
+                        curX = startX + u * (targetX - startX);
+                        curY = startY + u * (targetY - startY);
+                        curR = startR + u * (targetR - startR);
+                        curZ = zSafe;
+                    } else {
+                        const u = easeInOut((t - 0.72) / (1.0 - 0.72));
+                        curX = targetX;
+                        curY = targetY;
+                        curR = targetR;
+                        curZ = zSafe + u * (targetZ_TCP - zSafe);
+                    }
+                } else {
+                    // Direct PTP linear interpolation
+                    const u = easeInOut(t);
+                    curX = startX + u * (targetX - startX);
+                    curY = startY + u * (targetY - startY);
+                    curZ = startZ + u * (targetZ_TCP - startZ);
+                    curR = startR + u * (targetR - startR);
+                }
+
+                const ik = solveIK(curX, curY, curZ);
+                if (ik) {
+                    const zFlange = curZ + toolOffset;
+                    const j4 = curR - ik.j1;
+                    renderRobot(ik.j1, ik.j2, ik.j3, j4, curX, curY, zFlange);
+                }
+
+                await sleepMs(stepMs);
+            }
+
+            // Ensure exact target pose at the end
+            const finalIk = solveIK(targetX, targetY, targetZ_TCP);
+            if (finalIk) {
+                const finalZFlange = targetZ_TCP + toolOffset;
+                const finalJ4 = targetR - finalIk.j1;
+                renderRobot(finalIk.j1, finalIk.j2, finalIk.j3, finalJ4, targetX, targetY, finalZFlange);
+            }
+            return true;
+        }
+
+        async function animateRobotJoints(targetJ1, targetJ2, targetJ3, targetJ4, totalDurationMs=450, checkActive=null, isPaused=null) {
+            const startJ1 = (lastRawJoints && !isNaN(lastRawJoints.j1)) ? lastRawJoints.j1 : 0;
+            const startJ2 = (lastRawJoints && !isNaN(lastRawJoints.j2)) ? lastRawJoints.j2 : 0;
+            const startJ3 = (lastRawJoints && !isNaN(lastRawJoints.j3)) ? lastRawJoints.j3 : 0;
+            const startJ4 = (lastRawJoints && !isNaN(lastRawJoints.j4)) ? lastRawJoints.j4 : 0;
+
+            function easeInOut(t) {
+                return t * t * (3 - 2 * t);
+            }
+
+            const stepMs = 25;
+            const steps = Math.max(6, Math.round(totalDurationMs / stepMs));
+
+            for (let step = 1; step <= steps; step++) {
+                if (checkActive && !checkActive()) return false;
+                while (isPaused && isPaused()) {
+                    if (checkActive && !checkActive()) return false;
+                    await sleepMs(50);
+                }
+
+                const t = step / steps;
+                const u = easeInOut(t);
+                const curJ1 = startJ1 + u * (targetJ1 - startJ1);
+                const curJ2 = startJ2 + u * (targetJ2 - startJ2);
+                const curJ3 = startJ3 + u * (targetJ3 - startJ3);
+                const curJ4 = startJ4 + u * (targetJ4 - startJ4);
+
+                renderRobot(curJ1, curJ2, curJ3, curJ4);
+                await sleepMs(stepMs);
+            }
+
+            renderRobot(targetJ1, targetJ2, targetJ3, targetJ4);
+            return true;
+        }
+
         function updateHudLabel(worldPos, x, y, z) {
             const label = document.getElementById('hud-label');
             const pos = worldPos.clone();
             pos.project(camera);
             
             if (pos.z < 1) {
-                const sx = (pos.x * 0.5 + 0.5) * window.innerWidth;
-                const sy = (-(pos.y * 0.5) + 0.5) * window.innerHeight;
+                const sx = Math.round((pos.x * 0.5 + 0.5) * window.innerWidth);
+                const sy = Math.round((-(pos.y * 0.5) + 0.5) * window.innerHeight);
                 label.style.left = `${sx}px`;
                 label.style.top = `${sy}px`;
                 label.style.display = 'block';
@@ -1894,16 +2124,47 @@
             document.getElementById('joint-controls').style.display = (sys === 'joint') ? 'block' : 'none';
         }
 
+        let isPanelCollapsed = false;
+        function togglePanelCollapse() {
+            const panel = document.getElementById('panel');
+            const btn = document.getElementById('btn-panel-minimize');
+            if (!panel) return;
+            isPanelCollapsed = !isPanelCollapsed;
+            panel.classList.toggle('panel-collapsed', isPanelCollapsed);
+            if (btn) {
+                btn.innerText = isPanelCollapsed ? "▲" : "▼";
+                btn.title = isPanelCollapsed ? "Mở rộng bảng điều khiển" : "Thu gọn bảng điều khiển";
+            }
+        }
+
         function setMode(mode) {
             currentMode = mode;
             document.getElementById('btn-mode-live').classList.toggle('active', mode === 'live');
             document.getElementById('btn-mode-manual').classList.toggle('active', mode === 'manual');
             
+            const badge = document.getElementById('status-badge');
+            const statusText = document.getElementById('status-text');
+
             if (mode === 'manual') {
                 syncSlidersWithCurrentPose();
-                showToast('🎮 Chế độ Manual: Kéo thanh trượt để xem trước mô phỏng');
+                if (badge && statusText) {
+                    badge.className = "status-badge simulation";
+                    statusText.innerText = "🎮 Đang chạy mô phỏng 3D độc lập";
+                }
+                showToast('🎮 Chế độ Mô phỏng: Kéo thanh trượt hoặc chạy kịch bản ảo độc lập');
             } else {
-                showToast('⚡ Chế độ Live: Mô hình 3D theo dõi chuyển động thực tế');
+                if (isRobotHardwareConnected) {
+                    if (badge && statusText) {
+                        badge.className = "status-badge live";
+                        statusText.innerText = "● Đang đồng bộ thật";
+                    }
+                } else {
+                    if (badge && statusText) {
+                        badge.className = "status-badge offline";
+                        statusText.innerText = "○ Chưa cắm USB hoặc Robot đang tắt";
+                    }
+                }
+                showToast('⚡ Chế độ Live: Đồng bộ thời gian thực với Robot Dobot');
             }
         }
 
@@ -2091,13 +2352,13 @@
             const p = pos.clone();
             p.project(camera);
             if (p.z < 1) {
-                const sx = (p.x * 0.5 + 0.5) * window.innerWidth;
-                const sy = (-(p.y * 0.5) + 0.5) * window.innerHeight;
+                const sx = Math.round((p.x * 0.5 + 0.5) * window.innerWidth);
+                const sy = Math.round((-(p.y * 0.5) + 0.5) * window.innerHeight);
                 label.style.left = `${sx}px`;
                 label.style.top = `${sy}px`;
                 label.style.display = 'block';
-                label.style.borderColor = isValid ? '#51cf66' : '#ff6b6b';
-                label.style.color = isValid ? '#51cf66' : '#ff6b6b';
+                label.style.borderColor = isValid ? '#22c55e' : '#ef4444';
+                label.style.color = isValid ? '#4ade80' : '#f87171';
                 label.innerText = `🎯 ĐÍCH: (${x.toFixed(0)}, ${y.toFixed(0)}, ${zTcp.toFixed(0)})`;
             } else {
                 label.style.display = 'none';
@@ -2133,7 +2394,7 @@
             showToast(`🎯 Đã chọn điểm đích: X=${x}, Y=${y}, Z=${z}`);
         }
 
-        function executeGoToPoint(mode) {
+        async function executeGoToPoint(mode) {
             const x = parseFloat(document.getElementById('inp-target-x').value);
             const y = parseFloat(document.getElementById('inp-target-y').value);
             const zTcp = parseFloat(document.getElementById('inp-target-z').value);
@@ -2146,12 +2407,17 @@
             }
 
             const zFlange = zTcp + toolOffset;
-            if (mode === 'safe') {
-                sendAction('safe_jump', { x: x, y: y, z: zFlange, r: r });
-                showToast(`📦 Safe Jump: Nhấc an toàn -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+            if (isSimulationMode()) {
+                showToast(`🎮 [Mô phỏng 3D] ${mode === 'safe' ? 'Nhấc an toàn' : 'Bay thẳng'} -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                await animateRobotCartesian(x, y, zTcp, r, mode, mode === 'safe' ? 600 : 450);
             } else {
-                sendAction('move_xyz', { x: x, y: y, z: zFlange, r: r, mode: 1 });
-                showToast(`🚀 Direct PTP: Bay thẳng -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                if (mode === 'safe') {
+                    sendAction('safe_jump', { x: x, y: y, z: zFlange, r: r });
+                    showToast(`📦 Safe Jump: Nhấc an toàn -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                } else {
+                    sendAction('move_xyz', { x: x, y: y, z: zFlange, r: r, mode: 1 });
+                    showToast(`🚀 Direct PTP: Bay thẳng -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                }
             }
         }
 
@@ -2235,15 +2501,16 @@
             let html = '';
             teachWaypoints.forEach((pt, idx) => {
                 const isCurrent = (isPlaybackRunning && playbackCurrentIndex === idx);
+                const isSafe = (pt.moveType === 'safe');
                 html += `
-                    <div class="teach-card ${isCurrent ? 'active-step' : ''}" id="teach-step-${idx}">
+                    <div class="teach-card ${isCurrent ? 'active-step' : ''} ${isSafe ? 'type-safe' : 'type-direct'}" id="teach-step-${idx}">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div style="display: flex; align-items: center; gap: 6px;">
-                                <span style="font-weight: 700; color: #38bdf8; font-size: 11px;">#${idx + 1}</span>
+                                <span class="teach-step-pill">#${idx + 1}</span>
                                 <input type="text" value="${pt.name}" onchange="updateTeachPointProp(${idx}, 'name', this.value)"
-                                    style="background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,0.15); color: #fff; font-size: 11.5px; font-weight: 600; width: 85px; outline: none; padding: 1px 2px;">
+                                    style="background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,0.18); color: #fff; font-size: 11.5px; font-weight: 600; width: 85px; outline: none; padding: 1px 2px;">
                             </div>
-                            <span style="font-family: monospace; font-size: 10.5px; color: #94a3b8;">
+                            <span style="font-family: monospace; font-size: 10.5px; color: #38bdf8; font-weight: bold; background: rgba(56,189,248,0.1); padding: 1px 5px; border-radius: 4px;">
                                 X:${pt.x.toFixed(0)} Y:${pt.y.toFixed(0)} Z:${pt.zTcp.toFixed(0)}
                             </span>
                             <div style="display: flex; gap: 3px;">
@@ -2252,7 +2519,7 @@
                             </div>
                         </div>
                         <div style="display: flex; gap: 5px; margin-top: 5px; align-items: center;">
-                            <select class="teach-select" onchange="updateTeachPointProp(${idx}, 'moveType', this.value)" style="flex: 1.1;">
+                            <select class="teach-select" onchange="updateTeachPointProp(${idx}, 'moveType', this.value); renderTeachList();" style="flex: 1.1;">
                                 <option value="safe" ${pt.moveType === 'safe' ? 'selected' : ''}>📦 Safe Jump</option>
                                 <option value="direct" ${pt.moveType === 'direct' ? 'selected' : ''}>🚀 Direct PTP</option>
                             </select>
@@ -2264,7 +2531,7 @@
                             <div style="display: flex; align-items: center; gap: 2px;">
                                 <input type="number" class="teach-input-num" value="${pt.delay || 1.0}" step="0.5" min="0" max="30"
                                     onchange="updateTeachPointProp(${idx}, 'delay', parseFloat(this.value) || 0)">
-                                <span style="font-size: 10px; color: #94a3b8;">s</span>
+                                <span style="font-size: 11px; color: #cbd5e1; font-weight: 600;">s</span>
                             </div>
                         </div>
                     </div>
@@ -2303,14 +2570,20 @@
             playbackLoop = checked;
         }
 
-        function executeSingleTeachPoint(idx) {
+        async function executeSingleTeachPoint(idx) {
             const pt = teachWaypoints[idx];
             if (!pt) return;
             const zFlange = pt.zTcp + toolOffset;
-            if (pt.moveType === 'safe') {
-                sendAction('safe_jump', { x: pt.x, y: pt.y, z: zFlange, r: pt.r });
+            if (isSimulationMode()) {
+                showToast(`🎮 [Mô phỏng 3D] Di chuyển tới ${pt.name} (X=${pt.x}, Y=${pt.y}, Z=${pt.zTcp})`);
+                await animateRobotCartesian(pt.x, pt.y, pt.zTcp, pt.r, pt.moveType, pt.moveType === 'safe' ? 550 : 400);
             } else {
-                sendAction('move_xyz', { x: pt.x, y: pt.y, z: zFlange, r: pt.r, mode: 1 });
+                if (pt.moveType === 'safe') {
+                    sendAction('safe_jump', { x: pt.x, y: pt.y, z: zFlange, r: pt.r });
+                } else {
+                    sendAction('move_xyz', { x: pt.x, y: pt.y, z: zFlange, r: pt.r, mode: 1 });
+                }
+                showToast(`▶️ Đang di chuyển tới ${pt.name} (X=${pt.x}, Y=${pt.y}, Z=${pt.zTcp})`);
             }
 
             if (pt.suction === 'on') {
@@ -2318,8 +2591,6 @@
             } else if (pt.suction === 'off') {
                 setSuctionState(false);
             }
-
-            showToast(`▶️ Đang di chuyển tới ${pt.name} (X=${pt.x}, Y=${pt.y}, Z=${pt.zTcp})`);
         }
 
         function setSuctionState(enable) {
@@ -2397,21 +2668,26 @@
                         renderTeachList();
                         const pt = teachWaypoints[i];
                         const statusBar = document.getElementById('playback-status-bar');
+                        const isSim = isSimulationMode();
                         if (statusBar) {
-                            statusBar.innerText = `Đang chạy: Bước ${i+1}/${teachWaypoints.length} (${pt.name})${playbackLoop ? ` | Vòng ${loopCount}` : ''}`;
-                            statusBar.style.color = "#4ade80";
+                            statusBar.innerText = `${isSim ? '🎮 [Mô phỏng 3D]' : 'Đang chạy'}: Bước ${i+1}/${teachWaypoints.length} (${pt.name})${playbackLoop ? ` | Vòng ${loopCount}` : ''}`;
+                            statusBar.style.color = isSim ? "#38bdf8" : "#4ade80";
                         }
 
-                        // 1. Gửi lệnh di chuyển
+                        // 1. Gửi lệnh di chuyển & Chờ hoàn thành
                         const zFlange = pt.zTcp + toolOffset;
-                        if (pt.moveType === 'safe') {
-                            sendAction('safe_jump', { x: pt.x, y: pt.y, z: zFlange, r: pt.r });
+                        if (isSim) {
+                            const ok = await animateRobotCartesian(pt.x, pt.y, pt.zTcp, pt.r, pt.moveType, pt.moveType === 'safe' ? 550 : 400, () => isPlaybackRunning, () => isPlaybackPaused);
+                            if (!ok && !isPlaybackRunning) break;
                         } else {
-                            sendAction('move_xyz', { x: pt.x, y: pt.y, z: zFlange, r: pt.r, mode: 1 });
+                            if (pt.moveType === 'safe') {
+                                sendAction('safe_jump', { x: pt.x, y: pt.y, z: zFlange, r: pt.r });
+                            } else {
+                                sendAction('move_xyz', { x: pt.x, y: pt.y, z: zFlange, r: pt.r, mode: 1 });
+                            }
+                            // 2. Chờ robot hoàn thành di chuyển
+                            await waitForRobotToReach(pt.x, pt.y, zFlange, 7000);
                         }
-
-                        // 2. Chờ robot hoàn thành di chuyển
-                        await waitForRobotToReach(pt.x, pt.y, zFlange, 7000);
                         if (!isPlaybackRunning) break;
 
                         // 3. Xử lý giác hút nếu có cài đặt
@@ -2474,7 +2750,7 @@
             if (btnStop) btnStop.disabled = true;
             if (statusBar) {
                 statusBar.innerText = "Trạng thái: Sẵn sàng";
-                statusBar.style.color = "#94a3b8";
+                statusBar.style.color = "#cbd5e1";
             }
             renderTeachList();
         }
@@ -2810,6 +3086,7 @@
                 const msg = JSON.parse(event.data);
                 if (msg.type === "pose") {
                     if (msg.connected && msg.data) {
+                        isRobotHardwareConnected = true;
                         lastKnownRobotPose = {
                             x: msg.data.x,
                             y: msg.data.y,
@@ -2830,8 +3107,14 @@
                             renderRobot(msg.data.j1, msg.data.j2, msg.data.j3, msg.data.j4, msg.data.x, msg.data.y, msg.data.z);
                         }
                     } else {
-                        badge.className = "status-badge offline";
-                        statusText.innerText = "○ Chưa cắm USB hoặc Robot đang tắt";
+                        isRobotHardwareConnected = false;
+                        if (currentMode === 'manual') {
+                            badge.className = "status-badge simulation";
+                            statusText.innerText = "🎮 Đang chạy mô phỏng 3D độc lập";
+                        } else {
+                            badge.className = "status-badge offline";
+                            statusText.innerText = "○ Chưa cắm USB hoặc Robot đang tắt";
+                        }
                     }
 
                     // Hiển thị hoặc ẩn banner báo động lỗi
@@ -2857,12 +3140,19 @@
             };
 
             ws.onclose = () => {
-                badge.className = "status-badge offline";
-                statusText.innerText = "○ Chưa bật Server hoặc chưa cắm USB (Tự thử lại...)";
+                isRobotHardwareConnected = false;
+                if (currentMode === 'manual') {
+                    badge.className = "status-badge simulation";
+                    statusText.innerText = "🎮 Đang chạy mô phỏng 3D độc lập";
+                } else {
+                    badge.className = "status-badge offline";
+                    statusText.innerText = "○ Chưa bật Server hoặc chưa cắm USB (Tự thử lại...)";
+                }
                 setTimeout(initWebSocket, 2500);
             };
 
             ws.onerror = () => {
+                isRobotHardwareConnected = false;
                 try { ws.close(); } catch(e){}
             };
         }
@@ -2899,8 +3189,13 @@
                 "Bạn có muốn tiếp tục chạy Homing ngay bây giờ?"
             );
             if (confirmed) {
-                sendAction('home');
-                showToast('🏠 Đang thực hiện Homing về gốc tọa độ chuẩn...');
+                if (isSimulationMode()) {
+                    showToast('🏠 [Mô phỏng 3D] Đang Homing về gốc...');
+                    animateRobotCartesian(250, 0, 50, 0, 'safe', 600);
+                } else {
+                    sendAction('home');
+                    showToast('🏠 Đang thực hiện Homing về gốc tọa độ chuẩn...');
+                }
             }
         }
 
@@ -2931,7 +3226,7 @@
             }, 260);
         }
 
-        function showBlocklyStatus(msg, color='#94a3b8') {
+        function showBlocklyStatus(msg, color='#f1f5f9') {
             const txt = document.getElementById('blockly-status-text');
             const dot = document.getElementById('blockly-status-dot');
             if (txt) {
@@ -3243,6 +3538,40 @@
             }
         }
 
+        function copyBlocklyCodeToClipboard() {
+            const pre = document.getElementById('blockly-code-content');
+            if (!pre || !pre.innerText || pre.innerText.startsWith('# Chưa có') || pre.innerText.startsWith('// Chưa có')) {
+                showToast('⚠️ Chưa có mã nguồn để sao chép!');
+                return;
+            }
+            const text = pre.innerText;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast('📋 Đã sao chép mã nguồn vào bộ nhớ tạm!');
+                }).catch(() => {
+                    fallbackCopyText(text);
+                });
+            } else {
+                fallbackCopyText(text);
+            }
+        }
+
+        function fallbackCopyText(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+                showToast('📋 Đã sao chép mã nguồn vào bộ nhớ tạm!');
+            } catch (e) {
+                showToast('⚠️ Không thể sao chép tự động!');
+            }
+            document.body.removeChild(ta);
+        }
+
         function waitForBlocklyRobotToReach(tx, ty, tzFlange, timeoutMs=7000) {
             return new Promise(resolve => {
                 const startTime = Date.now();
@@ -3254,7 +3583,7 @@
                     }
                     if (isBlocklyPaused) return;
 
-                    if (ws && ws.readyState === WebSocket.OPEN) {
+                    if (!isSimulationMode()) {
                         const cur = lastKnownRobotPose;
                         if (cur) {
                             const dx = cur.x - tx;
@@ -3268,7 +3597,7 @@
                             }
                         }
                     } else {
-                        if (Date.now() - startTime >= 500) {
+                        if (Date.now() - startTime >= 400) {
                             clearInterval(timer);
                             resolve();
                             return;
@@ -3294,7 +3623,7 @@
                     }
                     if (isBlocklyPaused) return;
 
-                    if (ws && ws.readyState === WebSocket.OPEN) {
+                    if (!isSimulationMode()) {
                         const cur = lastRawJoints;
                         if (cur) {
                             const dj1 = Math.abs(cur.j1 - j1);
@@ -3308,7 +3637,7 @@
                             }
                         }
                     } else {
-                        if (Date.now() - startTime >= 500) {
+                        if (Date.now() - startTime >= 400) {
                             clearInterval(timer);
                             resolve();
                             return;
@@ -3337,7 +3666,8 @@
 
             async moveXYZ(x, y, z, r, mode, blockId) {
                 await this.checkExecution(blockId);
-                showBlocklyStatus(`🦾 Di chuyển X=${x}, Y=${y}, Z=${z}, R=${r} (${mode === 'safe' ? 'Nhấc an toàn' : 'Bay thẳng'})...`, "#38bdf8");
+                const isSim = isSimulationMode();
+                showBlocklyStatus(`${isSim ? '🎮 [Mô phỏng 3D]' : '🦾'} Di chuyển X=${x}, Y=${y}, Z=${z}, R=${r} (${mode === 'safe' ? 'Nhấc an toàn' : 'Bay thẳng'})...`, isSim ? "#38bdf8" : "#4ade80");
 
                 const rHoriz = Math.sqrt(x * x + y * y);
                 if (rHoriz < 140.0 || rHoriz > 330.0 || z < -120.0 || z > 150.0) {
@@ -3345,46 +3675,44 @@
                 }
 
                 const zFlange = z + toolOffset;
-                if (ws && ws.readyState === WebSocket.OPEN) {
+                if (isSim) {
+                    const ok = await animateRobotCartesian(x, y, z, r, mode, mode === 'safe' ? 550 : 400, () => isBlocklyRunning, () => isBlocklyPaused);
+                    if (!ok && !isBlocklyRunning) throw new Error('BLOCKLY_STOPPED');
+                } else {
                     if (mode === 'safe') {
                         sendAction('safe_jump', { x: x, y: y, z: zFlange, r: r });
                     } else {
                         sendAction('move_xyz', { x: x, y: y, z: zFlange, r: r, mode: 1 });
                     }
                     await waitForBlocklyRobotToReach(x, y, zFlange, 8000);
-                } else {
-                    const ik = solveIK(x, y, z);
-                    if (ik) {
-                        renderRobot(ik.j1, ik.j2, ik.j3, r - ik.j1, x, y, zFlange);
-                    }
-                    lastKnownRobotPose = { x: x, y: y, z: zFlange, r: r, zTcp: z };
-                    await waitForBlocklyRobotToReach(x, y, zFlange, 600);
                 }
                 await this.checkExecution(blockId);
             },
 
             async moveJoints(j1, j2, j3, j4, blockId) {
                 await this.checkExecution(blockId);
-                showBlocklyStatus(`🦾 Quay khớp J1=${j1}°, J2=${j2}°, J3=${j3}°, J4=${j4}°...`, "#818cf8");
+                const isSim = isSimulationMode();
+                showBlocklyStatus(`${isSim ? '🎮 [Mô phỏng 3D]' : '🦾'} Quay khớp J1=${j1}°, J2=${j2}°, J3=${j3}°, J4=${j4}°...`, "#818cf8");
 
-                if (ws && ws.readyState === WebSocket.OPEN) {
+                if (isSim) {
+                    const ok = await animateRobotJoints(j1, j2, j3, j4, 450, () => isBlocklyRunning, () => isBlocklyPaused);
+                    if (!ok && !isBlocklyRunning) throw new Error('BLOCKLY_STOPPED');
+                } else {
                     sendAction('move_joint', { j1: j1, j2: j2, j3: j3, j4: j4, mode: 4 });
                     await waitForBlocklyJointsToReach(j1, j2, j3, j4, 8000);
-                } else {
-                    renderRobot(j1, j2, j3, j4);
-                    await waitForBlocklyJointsToReach(j1, j2, j3, j4, 600);
                 }
                 await this.checkExecution(blockId);
             },
 
             async moveRelative(dx, dy, dz, dr, blockId) {
                 await this.checkExecution(blockId);
-                showBlocklyStatus(`🦾 Di chuyển tương đối dX=${dx}, dY=${dy}, dZ=${dz}...`, "#2dd4bf");
+                const isSim = isSimulationMode();
+                showBlocklyStatus(`${isSim ? '🎮 [Mô phỏng 3D]' : '🦾'} Di chuyển tương đối dX=${dx}, dY=${dy}, dZ=${dz}...`, "#2dd4bf");
 
-                const curX = currentX || lastKnownRobotPose.x || 250;
-                const curY = currentY || lastKnownRobotPose.y || 0;
-                const curZ = currentZ || lastKnownRobotPose.zTcp || 30;
-                const curR = currentR || lastKnownRobotPose.r || 0;
+                const curX = currentX || (lastKnownRobotPose && lastKnownRobotPose.x) || 250;
+                const curY = currentY || (lastKnownRobotPose && lastKnownRobotPose.y) || 0;
+                const curZ = currentZ !== undefined ? currentZ : ((lastKnownRobotPose && lastKnownRobotPose.zTcp !== undefined) ? lastKnownRobotPose.zTcp : 30);
+                const curR = currentR || (lastKnownRobotPose && lastKnownRobotPose.r) || 0;
 
                 await this.moveXYZ(curX + dx, curY + dy, curZ + dz, curR + dr, 'direct', blockId);
             },
@@ -3411,13 +3739,14 @@
 
             async home(blockId) {
                 await this.checkExecution(blockId);
-                showBlocklyStatus(`🏠 Đang chạy Homing...`, "#fb923c");
-                if (ws && ws.readyState === WebSocket.OPEN) {
+                const isSim = isSimulationMode();
+                showBlocklyStatus(`${isSim ? '🎮 [Mô phỏng 3D]' : '🏠'} Về vị trí Home an toàn...`, "#fb923c");
+                if (isSim) {
+                    const ok = await animateRobotCartesian(250, 0, 50, 0, 'safe', 550, () => isBlocklyRunning, () => isBlocklyPaused);
+                    if (!ok && !isBlocklyRunning) throw new Error('BLOCKLY_STOPPED');
+                } else {
                     sendAction('home');
                     await sleepMs(4000);
-                } else {
-                    renderRobot(0, 0, 0, 0, 250, 0, 0);
-                    await sleepMs(800);
                 }
                 await this.checkExecution(blockId);
             }
@@ -3453,7 +3782,11 @@
             document.getElementById('btn-blockly-run').disabled = true;
             document.getElementById('btn-blockly-pause').disabled = false;
             document.getElementById('btn-blockly-stop').disabled = false;
-            showBlocklyStatus("▶️ Đang khởi chạy chương trình khối...", "#4ade80");
+            if (isSimulationMode()) {
+                showBlocklyStatus("▶️ [Chế độ Mô Phỏng 3D] Đang chạy chương trình...", "#38bdf8");
+            } else {
+                showBlocklyStatus("▶️ Đang khởi chạy chương trình trên Robot thật...", "#4ade80");
+            }
 
             try {
                 const runnerFn = new Function('dobotApi', 'sleepMs', `
@@ -3466,7 +3799,7 @@
                 showToast("✅ Đã hoàn thành chương trình khối!");
             } catch (err) {
                 if (err.message === 'BLOCKLY_STOPPED') {
-                    showBlocklyStatus("⏹️ Đã dừng chương trình.", "#94a3b8");
+                    showBlocklyStatus("⏹️ Đã dừng chương trình.", "#cbd5e1");
                     showToast("⏹️ Đã dừng chương trình!");
                 } else {
                     console.error("Lỗi thực thi Blockly:", err);
