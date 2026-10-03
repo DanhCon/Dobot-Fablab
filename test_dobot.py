@@ -32,7 +32,16 @@ ALARM_DICT = {
     0x23: "Lỗi hành trình Khớp 3 (Joint 3 Limit)",
     0x24: "Lỗi hành trình Khớp 4 (Joint 4 Limit)",
     0x30: "Lỗi quá tốc độ chuyển động (Overspeed Alarm)",
-    0x40: "Lỗi cảm biến công tắc hành trình (Sensor/Limit Switch Alarm)",
+    0x40: "Chạm giới hạn góc dương Khớp 1 (+J1 Positive Limit)",
+    0x41: "Chạm giới hạn góc âm Khớp 1 (-J1 Negative Limit)",
+    0x42: "Chạm giới hạn góc dương Khớp 2 (+J2 Positive Limit - Cánh tay sau ngửa lên)",
+    0x43: "Chạm giới hạn góc âm Khớp 2 (-J2 Negative Limit - Cánh tay sau ngả xuống đáy)",
+    0x44: "Chạm giới hạn góc dương Khớp 3 (+J3 Positive Limit - Cẳng tay trước)",
+    0x45: "Chạm giới hạn góc âm Khớp 3 (-J3 Negative Limit - Cẳng tay trước)",
+    0x46: "Chạm giới hạn góc dương Khớp 4 (+J4 Positive Limit - Xoay đầu hút)",
+    0x47: "Chạm giới hạn góc âm Khớp 4 (-J4 Negative Limit - Xoay đầu hút)",
+    0x48: "Chạm giới hạn dương cơ cấu bình hành (Parallelogram Positive Limit)",
+    0x49: "Chạm giới hạn âm cơ cấu bình hành (Parallelogram Negative Limit)",
 }
 
 

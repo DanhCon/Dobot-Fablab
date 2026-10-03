@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- =================================================================================== -->
+<!-- |    DOBOT MAGICIAN SLIDING RAIL KIT URDF MODEL                                   | -->
+<!-- |    Official Kinematics & Physical Parameters                                    | -->
+<!-- |    Travel Range: 0.0 m to 1.0 m (1000 mm)                                       | -->
+<!-- |    Pulley Ratio: GT2 20T (80 pulses/mm)                                         | -->
+<!-- =================================================================================== -->
+<robot name="dobot_sliding_rail">
+
+  <!-- Materials Definition -->
+  <material name="rail_aluminum">
+    <color rgba="0.78 0.82 0.86 1.0"/>
+  </material>
+
+  <material name="chrome_shaft">
+    <color rgba="0.92 0.94 0.96 1.0"/>
+  </material>
+
+  <material name="anodized_black">
+    <color rgba="0.12 0.14 0.18 1.0"/>
+  </material>
+
+  <material name="timing_belt_rubber">
+    <color rgba="0.08 0.08 0.09 1.0"/>
+  </material>
+
+  <material name="dobot_blue">
+    <color rgba="0.094 0.392 0.671 1.0"/>
+  </material>
+
+  <!-- World / Base Footprint -->
+  <link name="rail_footprint"/>
+
+  <joint name="rail_footprint_joint" type="fixed">
+    <parent link="rail_footprint"/>
+    <child link="rail_base_link"/>
+    <origin xyz="0 0 0.018" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 1. BASE RAIL (Thanh ray nhôm định hình 1120 x 140 x 36 mm) -->
+  <link name="rail_base_link">
+    <!-- Main Aluminum Extrusion Body -->
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.140 1.120 0.026"/>
+      </geometry>
+      <material name="rail_aluminum"/>
+    </visual>
+
+    <!-- Linear Guide Shaft 1 (Right chrome rod d=12mm) -->
+    <visual>
+      <origin xyz="0.045 0 0.016" rpy="1.5707963 0 0"/>
+      <geometry>
+        <cylinder radius="0.006" length="1.100"/>
+      </geometry>
+      <material name="chrome_shaft"/>
+    </visual>
+
+    <!-- Linear Guide Shaft 2 (Left chrome rod d=12mm) -->
+    <visual>
+      <origin xyz="-0.045 0 0.016" rpy="1.5707963 0 0"/>
+      <geometry>
+        <cylinder radius="0.006" length="1.100"/>
+      </geometry>
+      <material name="chrome_shaft"/>
+    </visual>
+
+    <!-- Central GT2 Timing Belt Groove -->
+    <visual>
+      <origin xyz="0 0 0.014" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.015 1.080 0.004"/>
+      </geometry>
+      <material name="timing_belt_rubber"/>
+    </visual>
+
+    <!-- Stepper Motor Housing (Origin end at Y = -0.52m) -->
+    <visual>
+      <origin xyz="0 -0.535 0.020" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.110 0.070 0.050"/>
+      </geometry>
+      <material name="anodized_black"/>
+    </visual>
+
+    <!-- Idler Tensioner Pulley Housing (Far end at Y = +0.535m) -->
+    <visual>
+      <origin xyz="0 0.535 0.016" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.110 0.050 0.040"/>
+      </geometry>
+      <material name="anodized_black"/>
+    </visual>
+
+    <!-- Collision Geometry for Safe Motion Planning -->
+    <collision>
+      <origin xyz="0 0 0.015" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.160 1.140 0.060"/>
+      </geometry>
+    </collision>
+
+    <!-- Inertial Parameters -->
+    <inertial>
+      <origin xyz="0 0 0.015" rpy="0 0 0"/>
+      <mass value="4.85"/>
+      <inertia ixx="0.508" ixy="0.0" ixz="0.0"
+               iyy="0.012" iyz="0.0"
+               izz="0.518"/>
+    </inertial>
+  </link>
+
+  <!-- 2. PRISMATIC SLIDING JOINT (Trục trượt tuyến tính L-axis) -->
+  <joint name="rail_joint" type="prismatic">
+    <parent link="rail_base_link"/>
+    <child link="rail_carriage_link"/>
+    <!-- Origin placed at L=0 position (Y = -0.500m) -->
+    <origin xyz="0 -0.500 0.026" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="0.0" upper="1.0" effort="150.0" velocity="0.08"/>
+    <dynamics damping="15.0" friction="5.0"/>
+  </joint>
+
+  <!-- 3. CARRIAGE PLATE (Bàn trượt nhôm mang đế robot Dobot Magician) -->
+  <link name="rail_carriage_link">
+    <!-- Carriage Main Plate 170 x 170 x 16 mm -->
+    <visual>
+      <origin xyz="0 0 0.008" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.170 0.170 0.016"/>
+      </geometry>
+      <material name="anodized_black"/>
+    </visual>
+
+    <!-- Linear Bearings Housing (4x SC12UU blocks) -->
+    <visual>
+      <origin xyz="0 0 -0.004" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.150 0.140 0.012"/>
+      </geometry>
+      <material name="rail_aluminum"/>
+    </visual>
+
+    <!-- Dobot Magician Mounting Recesses / Accents -->
+    <visual>
+      <origin xyz="0 0 0.0165" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.160 0.160 0.001"/>
+      </geometry>
+      <material name="dobot_blue"/>
+    </visual>
+
+    <!-- Carriage Collision -->
+    <collision>
+      <origin xyz="0 0 0.008" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.180 0.180 0.030"/>
+      </geometry>
+    </collision>
+
+    <!-- Carriage Inertial (Plate + Bearings + Cable Bracket) -->
+    <inertial>
+      <origin xyz="0 0 0.005" rpy="0 0 0"/>
+      <mass value="0.95"/>
+      <inertia ixx="0.0024" ixy="0.0" ixz="0.0"
+               iyy="0.0024" iyz="0.0"
+               izz="0.0046"/>
+    </inertial>
+  </link>
+
+  <!-- 4. MOUNTING INTERFACE LINK FOR DOBOT MAGICIAN BASE -->
+  <joint name="dobot_rail_mount_joint" type="fixed">
+    <parent link="rail_carriage_link"/>
+    <child link="dobot_mount_surface"/>
+    <origin xyz="0 0 0.017" rpy="0 0 0"/>
+  </joint>
+
+  <link name="dobot_mount_surface"/>
+
+</robot>

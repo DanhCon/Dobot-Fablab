@@ -39,8 +39,25 @@ ALARM_DICT = {
     0x23: "Lỗi hành trình Khớp 3 (Joint 3 Limit)",
     0x24: "Lỗi hành trình Khớp 4 (Joint 4 Limit)",
     0x30: "Lỗi quá tốc độ chuyển động (Overspeed Alarm)",
-    0x40: "Lỗi cảm biến công tắc hành trình (Sensor/Limit Switch Alarm)",
+    0x40: "Chạm giới hạn góc dương Khớp 1 (+J1 Positive Limit)",
+    0x41: "Chạm giới hạn góc âm Khớp 1 (-J1 Negative Limit)",
+    0x42: "Chạm giới hạn góc dương Khớp 2 (+J2 Positive Limit - Cánh tay sau ngửa lên)",
+    0x43: "Chạm giới hạn góc âm Khớp 2 (-J2 Negative Limit - Cánh tay sau ngả xuống đáy)",
+    0x44: "Chạm giới hạn góc dương Khớp 3 (+J3 Positive Limit - Cẳng tay trước)",
+    0x45: "Chạm giới hạn góc âm Khớp 3 (-J3 Negative Limit - Cẳng tay trước)",
+    0x46: "Chạm giới hạn góc dương Khớp 4 (+J4 Positive Limit - Xoay đầu hút)",
+    0x47: "Chạm giới hạn góc âm Khớp 4 (-J4 Negative Limit - Xoay đầu hút)",
+    0x48: "Chạm giới hạn dương cơ cấu bình hành (Parallelogram Positive Limit)",
+    0x49: "Chạm giới hạn âm cơ cấu bình hành (Parallelogram Negative Limit)",
 }
+
+# --- THÔNG SỐ RAY TRƯỢT DOBOT MAGICIAN (SLIDING RAIL KIT) ---
+RAIL_INDEX = 0             # Stepper 1 = index 0
+PULSES_PER_MM = 80.0       # CHUẨN XÁC: 80 xung = 1mm (PULLEY GT2 20T)
+RAIL_MAX_MM = 1000.0       # Hành trình ray tối đa 1000mm (0.0 -> 1000.0 mm)
+DEFAULT_SPEED_MM_S = 40.0  # 40 mm/s (~3200 xung/s) - tốc độ chuẩn mượt mà, không giật
+SWITCH_PIN = 14            # EIO 14 (Chân 3 cổng GP2)
+STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".rail_state.json")
 
 
 class DobotController:
@@ -53,6 +70,33 @@ class DobotController:
         self.cached_alarms = []
         self.last_pose = None
         self.alarm_poll_counter = 0
+
+        # Trạng thái ray trượt
+        self.rail_pos = self._load_rail_state()
+        self.rail_homed = (self.rail_pos is not None)
+        if self.rail_pos is None:
+            self.rail_pos = 0.0
+        self.rail_switch_state = 0
+        self.rail_lock = threading.Lock()
+        self.rail_is_moving = False
+        self.stop_requested = False
+
+    def _load_rail_state(self):
+        if os.path.exists(STATE_FILE):
+            try:
+                with open(STATE_FILE, "r") as f:
+                    return json.load(f).get("current_pos", None)
+            except Exception:
+                pass
+        return None
+
+    def _save_rail_state(self, pos):
+        self.rail_pos = round(float(pos), 2)
+        try:
+            with open(STATE_FILE, "w") as f:
+                json.dump({"current_pos": self.rail_pos, "updated_at": time.time()}, f)
+        except Exception:
+            pass
 
     def auto_detect_port(self):
         # Ưu tiên các cổng USB có CP2102 hoặc FTDI
@@ -270,8 +314,9 @@ class DobotController:
 
     def emergency_stop(self):
         """
-        Dừng khẩn cấp & Khôi phục: Dừng thực thi (242) + Xóa Queue (245) + Xóa Lỗi (20) + Mở lại Queue (240)
+        Dừng khẩn cấp & Khôi phục: Dừng thực thi (242) + Xóa Queue (245) + Xóa Lỗi (20) + Mở lại Queue (240) + Dừng ray
         """
+        self.rail_stop()
         with self.lock:
             if self.connected:
                 self._send_raw_cmd(id=242, ctrl=1) # SetQueuedCmdForceStopExec (ID 242)
@@ -370,6 +415,216 @@ class DobotController:
                 self._send_raw_cmd(id=62, ctrl=1, params=params)
                 print(f"[+] Giác hút: {'BẬT' if enable else 'TẮT'}")
 
+    def get_rail_switch(self) -> int:
+        """Đọc công tắc hành trình GP2 EIO 14 (1 = Chạm, 0 = Nhả)"""
+        with self.lock:
+            if not self.connected:
+                return self.rail_switch_state
+            try:
+                self.ser.reset_input_buffer()
+                self._send_raw_cmd(133, 0, bytes([SWITCH_PIN]))
+                rid, par = self._read_response(expected_id=133, timeout=0.04)
+                if par and len(par) >= 2 and par[0] == SWITCH_PIN:
+                    self.rail_switch_state = 1 if par[1] == 1 else 0
+                    return self.rail_switch_state
+            except Exception:
+                pass
+        return self.rail_switch_state
+
+    def rail_stop(self):
+        """Dừng khẩn cấp động cơ ray trượt"""
+        self.stop_requested = True
+        with self.lock:
+            if self.connected:
+                params = struct.pack("<B B i I", RAIL_INDEX, 0, 0, 0)
+                self._send_raw_cmd(20, 1)
+                self._send_raw_cmd(245, 1)
+                self._send_raw_cmd(240, 1)
+                self._send_raw_cmd(136, 3, params=params)
+                self._send_raw_cmd(240, 1)
+        self.rail_is_moving = False
+        print("[!] ĐÃ DỪNG KHẨN CẤP ĐỘNG CƠ RAY TRƯỢT")
+
+    def rail_jog(self, dist_mm: float, speed_mm_s: float = DEFAULT_SPEED_MM_S):
+        """
+        Di chuyển ray tương đối dist_mm với tốc độ speed_mm_s (mm/s)
+        dist_mm > 0: Chạy ra xa switch (tăng L)
+        dist_mm < 0: Chạy về hướng switch (giảm L)
+        """
+        if abs(dist_mm) < 0.1:
+            return True, f"Vị trí ray: {self.rail_pos:.1f} mm"
+
+        with self.rail_lock:
+            self.stop_requested = False
+            self.rail_is_moving = True
+            pulses = int(abs(dist_mm) * PULSES_PER_MM)
+            safe_speed = max(5.0, min(80.0, speed_mm_s))
+            speed_pulses = int(safe_speed * PULSES_PER_MM)
+            dir_speed = -speed_pulses if dist_mm >= 0 else speed_pulses
+
+            if dist_mm < 0 and self.get_rail_switch() == 1:
+                self.rail_is_moving = False
+                return False, "⚠️ Công tắc hành trình đang chạm, không thể lùi thêm!"
+
+            with self.lock:
+                if not self.connected:
+                    if not self.connect():
+                        self.rail_is_moving = False
+                        return False, "Robot chưa kết nối"
+                self._send_raw_cmd(240, 1)
+                params = struct.pack("<B B i I", RAIL_INDEX, 1, dir_speed, pulses)
+                self._send_raw_cmd(136, 3, params=params)
+                self._send_raw_cmd(240, 1)
+
+            t_duration = pulses / float(speed_pulses)
+            t0 = time.time()
+            interrupted = False
+            start_p = self.rail_pos
+            sign = 1 if dist_mm >= 0 else -1
+
+            while time.time() - t0 < t_duration:
+                if self.stop_requested:
+                    self.rail_stop()
+                    interrupted = True
+                    break
+                elapsed = time.time() - t0
+                fraction = min(1.0, elapsed / t_duration)
+                self.rail_pos = max(0.0, min(RAIL_MAX_MM, start_p + sign * fraction * abs(dist_mm)))
+                if dist_mm < 0 and self.get_rail_switch() == 1:
+                    self.rail_stop()
+                    self.rail_pos = 0.0
+                    self._save_rail_state(0.0)
+                    interrupted = True
+                    break
+                time.sleep(0.04)
+
+            if not interrupted:
+                self.rail_pos = max(0.0, min(RAIL_MAX_MM, start_p + dist_mm))
+                self._save_rail_state(self.rail_pos)
+            else:
+                self._save_rail_state(self.rail_pos)
+                self.rail_is_moving = False
+                return False, f"🛑 Đã dừng ray tại L = {self.rail_pos:.1f} mm"
+
+            self.rail_is_moving = False
+            return True, f"✅ Ray đã tới vị trí L = {self.rail_pos:.1f} mm"
+
+    def rail_move_to(self, target_mm: float, speed_mm_s: float = DEFAULT_SPEED_MM_S):
+        """Di chuyển ray tới tọa độ tuyệt đối target_mm (0.0 -> 1000.0 mm)"""
+        target_mm = max(0.0, min(RAIL_MAX_MM, float(target_mm)))
+        dist_mm = target_mm - self.rail_pos
+        return self.rail_jog(dist_mm, speed_mm_s)
+
+    def rail_home(self):
+        """
+        Dò gốc chuẩn xác cho ray trượt:
+        1. Nhả switch nếu đang bị đè
+        2. Coarse search về hướng switch
+        3. Fine search nhả switch xác định 0.0mm
+        Hỗ trợ ngắt dừng khẩn cấp tức thời (self.stop_requested).
+        """
+        with self.rail_lock:
+            self.stop_requested = False
+            self.rail_is_moving = True
+            with self.lock:
+                if not self.connected and not self.connect():
+                    self.rail_is_moving = False
+                    return False, "Robot chưa kết nối"
+                self._send_raw_cmd(20, 1)
+                self._send_raw_cmd(245, 1)
+                self._send_raw_cmd(240, 1)
+
+            if self.stop_requested:
+                self.rail_stop()
+                return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
+
+            # 1. Nhả switch nếu đang bị đè
+            if self.get_rail_switch() == 1:
+                params = struct.pack("<B B i I", RAIL_INDEX, 1, -int(25.0 * PULSES_PER_MM), int(15.0 * PULSES_PER_MM))
+                with self.lock:
+                    self._send_raw_cmd(136, 3, params=params)
+                    self._send_raw_cmd(240, 1)
+                t_end = time.time() + 1.0
+                while time.time() < t_end:
+                    if self.stop_requested:
+                        self.rail_stop()
+                        return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
+                    time.sleep(0.04)
+
+            if self.stop_requested:
+                self.rail_stop()
+                return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
+
+            # 2. Coarse search (25 mm/s)
+            step_mm = 20.0
+            step_pulses = int(step_mm * PULSES_PER_MM)
+            step_speed = int(25.0 * PULSES_PER_MM)
+            params = struct.pack("<B B i I", RAIL_INDEX, 1, step_speed, step_pulses)
+
+            found = False
+            for _ in range(65):
+                if self.stop_requested:
+                    self.rail_stop()
+                    return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
+                if self.get_rail_switch() == 1:
+                    found = True
+                    break
+                with self.lock:
+                    self._send_raw_cmd(136, 3, params=params)
+                    self._send_raw_cmd(240, 1)
+                t_end = time.time() + (step_pulses / step_speed)
+                while time.time() < t_end:
+                    if self.stop_requested:
+                        self.rail_stop()
+                        return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
+                    if self.get_rail_switch() == 1:
+                        found = True
+                        break
+                    time.sleep(0.01)
+                if found:
+                    break
+
+            if self.stop_requested:
+                self.rail_stop()
+                return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
+
+            self.rail_stop()
+            time.sleep(0.2)
+
+            if self.stop_requested:
+                return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
+
+            # 3. Fine search (8 mm/s nhả cữ)
+            fine_step = int(1.0 * PULSES_PER_MM)
+            fine_speed = int(8.0 * PULSES_PER_MM)
+            fine_params = struct.pack("<B B i I", RAIL_INDEX, 1, -fine_speed, fine_step)
+            for _ in range(30):
+                if self.stop_requested:
+                    self.rail_stop()
+                    return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
+                if self.get_rail_switch() == 0:
+                    break
+                with self.lock:
+                    self._send_raw_cmd(136, 3, params=fine_params)
+                    self._send_raw_cmd(240, 1)
+                t_end = time.time() + (fine_step / fine_speed + 0.02)
+                while time.time() < t_end:
+                    if self.stop_requested:
+                        self.rail_stop()
+                        return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
+                    time.sleep(0.01)
+
+            if self.stop_requested:
+                self.rail_stop()
+                return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
+
+            self.rail_stop()
+            self.rail_pos = 0.0
+            self.rail_homed = True
+            self._save_rail_state(0.0)
+            self.rail_is_moving = False
+            return True, "🎉 Homing ray trượt thành công! Gốc tọa độ L = 0.0 mm."
+
 
 robot = DobotController()
 connected_clients = set()
@@ -457,6 +712,43 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                 mode = int(cmd.get("mode", 4))
                 robot.move_joint(j1, j2, j3, j4, mode=mode)
                 self.write_message(json.dumps({"type": "feedback", "msg": f"🔄 Đang xoay khớp: J1={j1:.1f}°, J2={j2:.1f}°, J3={j3:.1f}°"}))
+            elif action == "rail_home":
+                def _do_home():
+                    ok, res_msg = robot.rail_home()
+                    for c in list(connected_clients):
+                        try:
+                            c.write_message(json.dumps({"type": "feedback", "msg": res_msg}))
+                        except Exception:
+                            pass
+                threading.Thread(target=_do_home, daemon=True).start()
+                self.write_message(json.dumps({"type": "feedback", "msg": "🏠 Bắt đầu dò gốc Home cho ray trượt..."}))
+            elif action == "rail_move":
+                target_l = float(cmd.get("l", 0.0))
+                speed = float(cmd.get("speed", DEFAULT_SPEED_MM_S))
+                def _do_move():
+                    ok, res_msg = robot.rail_move_to(target_l, speed)
+                    for c in list(connected_clients):
+                        try:
+                            c.write_message(json.dumps({"type": "feedback", "msg": res_msg}))
+                        except Exception:
+                            pass
+                threading.Thread(target=_do_move, daemon=True).start()
+                self.write_message(json.dumps({"type": "feedback", "msg": f"🛤️ Ray trượt đang di chuyển tới L={target_l:.1f} mm..."}))
+            elif action == "rail_jog":
+                delta = float(cmd.get("delta", 0.0) or cmd.get("dist", 0.0))
+                speed = float(cmd.get("speed", DEFAULT_SPEED_MM_S))
+                def _do_jog():
+                    ok, res_msg = robot.rail_jog(delta, speed)
+                    for c in list(connected_clients):
+                        try:
+                            c.write_message(json.dumps({"type": "feedback", "msg": res_msg}))
+                        except Exception:
+                            pass
+                threading.Thread(target=_do_jog, daemon=True).start()
+                self.write_message(json.dumps({"type": "feedback", "msg": f"🛤️ Ray Jog {'+' if delta >= 0 else ''}{delta:.1f} mm..."}))
+            elif action == "rail_stop":
+                robot.rail_stop()
+                self.write_message(json.dumps({"type": "feedback", "msg": "🛑 Đã dừng khẩn cấp ray trượt!"}))
         except Exception as e:
             print("[-] Lỗi xử lý lệnh từ client:", e)
 
@@ -477,6 +769,9 @@ class ApiCmdHandler(tornado.web.RequestHandler):
 
     def get(self):
         pose = robot.get_pose() or robot.last_pose or {}
+        pose["l"] = round(robot.rail_pos, 1)
+        pose["rail_switch"] = robot.rail_switch_state
+        pose["rail_homed"] = robot.rail_homed
         self.write({"status": "ok", "pose": pose, "connected": robot.connected})
 
     def post(self):
@@ -511,6 +806,22 @@ class ApiCmdHandler(tornado.web.RequestHandler):
             elif action == "home":
                 ok = robot.home()
                 self.write({"status": "ok" if ok else "fail"})
+            elif action == "rail_home":
+                threading.Thread(target=robot.rail_home, daemon=True).start()
+                self.write({"status": "ok", "msg": "Homing ray trượt đã bắt đầu"})
+            elif action == "rail_move":
+                target_l = float(cmd.get("l", 0.0))
+                speed = float(cmd.get("speed", DEFAULT_SPEED_MM_S))
+                threading.Thread(target=robot.rail_move_to, args=(target_l, speed), daemon=True).start()
+                self.write({"status": "ok", "msg": f"Đang di chuyển ray tới L={target_l} mm"})
+            elif action == "rail_jog":
+                delta = float(cmd.get("delta", 0.0) or cmd.get("dist", 0.0))
+                speed = float(cmd.get("speed", DEFAULT_SPEED_MM_S))
+                threading.Thread(target=robot.rail_jog, args=(delta, speed), daemon=True).start()
+                self.write({"status": "ok", "msg": f"Đang jog ray {delta} mm"})
+            elif action == "rail_stop":
+                robot.rail_stop()
+                self.write({"status": "ok", "msg": "Đã dừng ray trượt"})
             else:
                 self.write({"status": "error", "msg": f"Unknown action: {action}"})
         except Exception as e:
@@ -526,14 +837,24 @@ def poll_robot_pose():
         pose = robot.get_pose()
         poll_counter += 1
         
-        # Cứ 10 vòng đọc (~500ms) kiểm tra trạng thái cờ lỗi một lần
+        # Cứ 10 vòng đọc (~500ms) kiểm tra trạng thái cờ lỗi & công tắc hành trình
         alarms = robot.cached_alarms
         if poll_counter % 10 == 0:
             alarms = robot.get_alarms()
+            robot.get_rail_switch()
         
         has_alarm = bool(alarms and len(alarms) > 0)
         
+        # Nhúng thông số ray trượt L vào dữ liệu telemetry
+        rail_data = {
+            "l": round(robot.rail_pos, 1) if robot.rail_pos is not None else 0.0,
+            "rail_switch": robot.rail_switch_state,
+            "rail_homed": robot.rail_homed,
+            "rail_moving": robot.rail_is_moving
+        }
+        
         if pose:
+            pose.update(rail_data)
             msg = json.dumps({
                 "type": "pose",
                 "connected": True,
@@ -548,7 +869,8 @@ def poll_robot_pose():
                 "connected": False,
                 "port": robot.port or "Chưa kết nối",
                 "alarms": alarms,
-                "has_alarm": has_alarm
+                "has_alarm": has_alarm,
+                "data": rail_data
             })
         
         for client in list(connected_clients):

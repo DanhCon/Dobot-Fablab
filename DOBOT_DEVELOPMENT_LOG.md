@@ -177,7 +177,16 @@ Khi đọc ID 20 (Ctrl=0), Dobot trả về mảng 16 byte (128 bit). Bit thứ 
 | **`0x23`** | `Joint 3 Limit` | Khớp 3 (Forearm) chạm giới hạn | Jog lùi khớp 3 lại |
 | **`0x24`** | `Joint 4 Limit` | Khớp 4 (Xoay đầu hút) chạm giới hạn | Xoay góc $R$ về $0^\circ$ |
 | **`0x30`** | `Overspeed Alarm` | Vận tốc khớp vượt quá ngưỡng an toàn | Giảm vận tốc PTP xuống 30-50% |
-| **`0x40`** | `Sensor / Limit Switch` | Chạm công tắc hành trình vật lý | Bấm Homing hoặc kéo tay nhẹ ra khỏi cữ |
+| **`0x40`** | `Joint 1 Positive Limit` | Khớp 1 chạm giới hạn góc dương ($+J1$) | Jog Khớp 1 ngược chiều âm ($J1-$) |
+| **`0x41`** | `Joint 1 Negative Limit` | Khớp 1 chạm giới hạn góc âm ($-J1$) | Jog Khớp 1 ngược chiều dương ($J1+$) |
+| **`0x42`** | `Joint 2 Positive Limit` | Khớp 2 (cánh tay sau) chạm giới hạn dương ($+J2$) | Jog Khớp 2 ngược chiều âm ($J2-$) |
+| **`0x43`** | `Joint 2 Negative Limit` | Khớp 2 (cánh tay sau) chạm giới hạn âm ($-J2$) | Nâng nhẹ cánh tay sau lên / Jog $J2+$ |
+| **`0x44`** | `Joint 3 Positive Limit` | Khớp 3 (cẳng tay trước) chạm giới hạn dương ($+J3$) | Jog Khớp 3 ngược chiều âm ($J3-$) |
+| **`0x45`** | `Joint 3 Negative Limit` | Khớp 3 (cẳng tay trước) chạm giới hạn âm ($-J3$) | Jog Khớp 3 ngược chiều dương ($J3+$) |
+| **`0x46`** | `Joint 4 Positive Limit` | Khớp 4 (xoay đầu hút) chạm giới hạn dương ($+J4$) | Jog Khớp 4 ngược chiều âm ($J4-$) |
+| **`0x47`** | `Joint 4 Negative Limit` | Khớp 4 (xoay đầu hút) chạm giới hạn âm ($-J4$) | Jog Khớp 4 ngược chiều dương ($J4+$) |
+| **`0x48`** | `Parallelogram Positive Limit` | Cơ cấu thanh truyền song song đạt giới hạn dương | Jog đưa cánh tay về vùng làm việc trung tâm |
+| **`0x49`** | `Parallelogram Negative Limit` | Cơ cấu thanh truyền song song đạt giới hạn âm | Jog đưa cánh tay về vùng làm việc trung tâm |
 
 ---
 
@@ -447,62 +456,147 @@ Dưới đây là phân tích chi tiết các vấn đề kỹ thuật phát sin
 ---
 
 ### 14.4. Cải tiến 4: Bộ lọc vùng lồi (Convex Hull Boundary Check) cho thị giác Homography
-- **Vấn đề đặt ra:**
-  - Khi một khối màu nằm **ngoài** tứ giác tạo bởi 4 điểm calib, phép biến đổi phối cảnh 2D phẳng (Homography) xảy ra hiện tượng ngoại suy phân kỳ phi tuyến tính, làm sai lệch tọa độ robot rất lớn (ví dụ khối Vàng bị đẩy về $X < 50\\text{ mm}$).
-- **Giải pháp kỹ thuật cần triển khai:**
-  - Dùng hàm `cv2.pointPolygonTest()` kiểm tra tâm phôi `(cx, cy)` có nằm trong đa giác 4 điểm calib hay không.
-  - Nếu nằm ngoài đa giác: Đổi viền bounding box sang màu vàng cam và hiển thị nhãn `"NGOÀI VÙNG CALIB"` để nhắc người dùng gạt phôi vào giữa bàn làm việc.
 
 ---
 
-### 14.5. Bảng theo dõi tiến độ sửa đổi (Todo / Roadmap Tracker)
+## 16. TÍCH HỢP RAY TRƯỢT (SLIDING RAIL KIT) - CHẨN ĐOÁN LỖI PHẦN CỨNG, HIỆU CHUẨN TỈ LỆ & ĐIỀU KHIỂN HOÀN CHỈNH
 
-| STT | Hạng mục / Tính năng | File liên quan | Mức độ ưu tiên | Trạng thái |
-| :---: | :--- | :--- | :--- | :---: |
-| **1** | Bổ sung ROI an toàn trên Camera ($140 \le R \le 330\text{ mm}$) & Khóa chặn an toàn | `Object_Detection/dobot_auto_sort.py`<br>`DOBOT/dobot_auto_sort.py` | 🔴 **Cao (High)** | ✅ **ĐÃ HOÀN THÀNH** |
-| **2** | Cảnh báo trực quan OSD đỏ nhấp nháy trên Camera khi phôi ngoài tầm | `dobot_auto_sort.py` | 🟡 **Trung bình** | ✅ **ĐÃ HOÀN THÀNH** |
-| **3** | Tab Dạy Điểm & Chạy Chuỗi (Teach & Playback) đóng vòng phản hồi trên Web 3D | `dobot_visualizer.html`<br>`dist_netlify/index.html` | 🔴 **Cao (High)** | ✅ **ĐÃ HOÀN THÀNH** |
-| **4** | Tab Lập Trình Khối Kéo Thả Trực Quan (Dobot Blockly) | `dobot_visualizer.html`<br>`dist_netlify/index.html` | 🔴 **Cao (High)** | ✅ **ĐÃ HOÀN THÀNH** |
-| **5** | Chế Độ Mô Phỏng 3D Độc Lập khi không có Robot thật (Offline 3D Twin) | `dobot_visualizer.html`<br>`dist_netlify/index.html` | 🔴 **Cao (High)** | ✅ **ĐÃ HOÀN THÀNH** |
-| **6** | Tinh chỉnh & Nâng cấp Giao diện Toàn diện (UI/UX Refinements & Tactile Design) | `dobot_visualizer.html`<br>`dist_netlify/index.html` | 🔴 **Cao (High)** | ✅ **ĐÃ HOÀN THÀNH** |
-| **7** | Trợ Lý Điều Khiển Bằng Giọng Nói Tiếng Việt (Web Speech API) | `dobot_visualizer.html` | 🟢 **Mở rộng** | 📝 Đã lên thiết kế |
-| **8** | Trợ Lý Xếp Pallet & Xếp Chồng Tháp Tự Động (Palletizing Matrix) | `dobot_visualizer.html` | 🟢 **Mở rộng** | 📝 Đã lên thiết kế |
+### 16.1. Tổng quan cấu hình phần cứng
+* **Động cơ ray trượt:** Động cơ bước NEMA 17/42 cắm vào cổng **Stepper 1** (`RAIL_INDEX = 0` trên Dobot Magician).
+* **Công tắc hành trình (Limit Switch):** Loại tiếp điểm cơ 2 dây, thường đóng (**NC - Normally Closed**):
+  * Lúc bình thường (chưa chạm): 2 tiếp điểm chạm nhau $\to$ Thông mạch ($0\,\Omega$).
+  * Lúc bị chạm (nhấn vào switch): Tiếp điểm mở ra $\to$ Ngắt mạch (Hở mạch).
+* **Cổng kết nối cảm biến:** Cắm vào cổng **GP2** màu xanh lá ở hàng dưới trên cẳng tay robot (Forearm).
 
 ---
 
-## 15. GHI CHÚ THIẾT KẾ CÁC TÍNH NĂNG MỞ RỘNG (PLANNED FEATURE BACKLOG)
+### 16.2. Nhật ký lỗi đã gặp & Cách khắc phục toàn diện (Troubleshooting Log)
 
-### 15.1. Trợ Lý Điều Khiển Giọng Nói Tiếng Việt (Voice Control Assistant)
-- **Chuẩn kỹ thuật:** Web Speech API (`SpeechRecognition` & `SpeechSynthesis`).
-- **Khẩu lệnh mẫu:** *"Về home"*, *"Bật/Tắt giác hút"*, *"Dừng lại"*, *"Lên/Xuống/Tiến/Lùi/Trái/Phải"*, *"Vị trí chờ"*, *"Chạy kịch bản"*, *"Tọa độ hiện tại"*.
-- **Phản hồi âm thanh:** Loa phát tiếng Việt xác nhận hành động tức thì.
-- **Trực quan:** Micro phát sáng neon có hiệu ứng sóng âm thanh khi lắng nghe, phím tắt nhanh `[V]`.
+#### ❌ Lỗi 1: Không đọc được tín hiệu ngõ vào số từ cảm biến (Đọc luôn trả về 0)
+* **Hiện tượng:** Cắm cảm biến vào nhưng khi kiểm tra bằng code Python, tín hiệu không bao giờ thay đổi giữa 0 và 1.
+* **Nguyên nhân cốt lõi:**
+  * Mã lệnh cũ sử dụng **Command ID 132** (`SetIODO / GetIODO` - hàm đọc/ghi Digital Output). Trong firmware Dobot, hàm này chỉ đọc lại thanh ghi đệm ngõ ra chứ không đọc trạng thái vật lý ngõ vào.
+  * Mã lệnh chuẩn của giao thức Dobot Communication Protocol để đọc mức logic ngõ vào Digital Input là **Command ID 133 (`GetIODI`)**.
+* **Cách khắc phục:**
+  * Sửa lại hàm gửi nhận gói tin sang Command ID 133 với payload `bytes([pin_address])`. Giá trị trả về tại `par[1]` phản ánh chính xác 100% mức logic $0$ (LOW) hoặc $1$ (HIGH) của chân vi điều khiển.
 
-### 15.2. Trợ Lý Xếp Pallet & Xếp Chồng Tháp Tự Động (Palletizing & Stacking Matrix)
-- **Công thức ma trận tọa độ:** $X_{pallet}(i,j,k) = X_0 + i\cdot\Delta X$, $Y_{pallet}(i,j,k) = Y_0 + j\cdot\Delta Y$, $Z_{pallet}(i,j,k) = Z_0 + k\cdot\Delta Z$.
-- **Hỗ trợ 2 chế độ:** Lưới ma trận phẳng ($N \times M \times H$) và Tháp xếp chồng ($1 \times 1 \times H$).
-- **Mô phỏng 3D:** Hiển thị lưới pallet ảo (Ghost Grid) và tạo các khối hộp 3D ảo xuất hiện tại từng ô khi robot đặt xong phôi.
-- **Liên kết:** Chạy trực tiếp từ Wizard, hoặc 1-click xuất sang Tab Dạy Điểm (Teach & Playback) hay Tab Blockly.
+---
 
-### 15.3. Chế Độ Mô Phỏng 3D Hoàn Chỉnh khi Không Cắm Robot Thật (Standalone 3D Simulation)
-- **Vấn đề đã xử lý:** Khi WebSocket server chạy nhưng chưa cắm cáp USB robot, hoặc khi chạy offline trên Netlify/Vercel, kịch bản Blockly & Dạy Điểm từng bị treo 8 giây mỗi bước do chờ telemetry phần cứng.
-- **Giải pháp triển khai:**
-  - Tự động nhận diện `isSimulationMode()` thông minh (chưa cắm USB, server tắt, hoặc người dùng chọn nút `🎮 Mô phỏng (Manual)`).
-  - Tích hợp bộ nội suy thời gian thực `animateRobotCartesian` (Safe Jump 3 pha + Direct PTP) và `animateRobotJoints` với hàm gia tốc mượt mà cubic smoothstep ($s = 3t^2 - 2t^3$).
-  - Đồng bộ liên tục mô hình 3D, tọa độ HUD và các thanh trượt theo thời gian thực (~40 FPS), hỗ trợ tạm dừng, tiếp tục và dừng khẩn cấp tức thì.
+#### ❌ Lỗi 2: Đo đồng hồ VOM ở 2 đầu dây cảm biến chỉ ra 0V và 50mV (không nhảy mức logic)
+* **Hiện tượng:** Người dùng đo thông mạch công tắc bên ngoài thì tốt, nhưng khi cắm vào chân 1 và chân 3 cổng GP2 và đo điện áp thì lúc không nhấn ra $0\text{ V}$, lúc nhấn ra $50\text{ mV}$ (gần như $0\text{ V}$), robot không thể nhận biết được trạng thái.
+* **Nguyên nhân phần cứng:**
+  * Công tắc hành trình 2 dây là linh kiện bị động (Passive switch), bản thân nó không có nguồn điện.
+  * Cổng GP2 trên tay robot có sơ đồ 4 chân:
+    * `Chân 1 (ngoài cùng bên trái)`: `GND` (Mass $0\text{V}$).
+    * `Chân 2`: `REV` (`EIO13`).
+    * `Chân 3`: `PWM` (`EIO14`).
+    * `Chân 4 (ngoài cùng bên phải)`: `ADC` (`EIO15`).
+  * Khi cắm công tắc vào Chân 1 (GND) và Chân 3 (EIO14), nếu người dùng đếm ngược từ phải sang trái thì chân cắm sẽ là Chân 4 (ADC) và Chân 2 (REV), không hề có chân Mass GND!
+  * Đồng thời, khi công tắc hở mạch, nếu chân tín hiệu không có điện áp kéo lên thì nó sẽ lơ lửng ở $0\text{ V}$ (50 mV đo được chỉ là dòng rò nhiễu que đo).
+* **Cách khắc phục:**
+  * Chuẩn hóa chiều đếm chân theo sơ đồ mặt cắt giắc cắm: Nhìn trực diện cổng cắm với **rãnh gờ khuyết (notch) quay lên trên**, đếm từ **TRÁI sang PHẢI**:
+    * **Dây 1:** Cắm vào **Chân 1 (ngoài cùng bên trái - `GND`)**.
+    * **Dây 2:** Cắm vào **Chân 3 (thứ ba từ trái sang - `EIO14`)**.
+  * Kiểm tra an toàn điện: Khi hở mạch, Chân 3 có điện áp kéo nội $\approx 3.3\text{ V}$. Dòng điện khi thông mạch xuống GND chỉ là $I = \frac{3.3\text{V}}{40.000\,\Omega} \approx 0.08\text{ mA}$, an toàn tuyệt đối cho vi điều khiển, không lo chập cháy.
+  * Kết quả đo: Lúc không nhấn ra $0\text{ V}$ (`EIO14 = 0`), lúc nhấn ra $3.3\text{ V}$ (`EIO14 = 1`). Tín hiệu nhảy tức thì và cực kỳ ổn định.
 
-### 15.4. Đợt Nâng Cấp Giao Diện Toàn Diện (UI/UX Comprehensive Refinement - v2.2)
-- **Mục tiêu:** Tối ưu hóa công thái học, độ phản hồi và tính thẩm mỹ công nghiệp cho Web 3D Twin.
-- **Các cải tiến đã áp dụng:**
-  1. **Tính năng Thu Gọn / Mở Rộng Bảng Điều Khiển (`togglePanelCollapse`):** Thêm nút `▼ / ▲` trên Header và cho phép nhấp vào tiêu đề để thu nhỏ bảng điều khiển thành một thanh tiêu đề cực gọn, giúp quan sát toàn cảnh không gian 3D mà không bị che khuất trên màn hình nhỏ.
-  2. **Chống tràn màn hình di động (<400px):** Bổ sung `max-width: calc(100vw - 30px);` và thanh cuộn ngang ẩn mượt mà cho `.nav-tabs`, đảm bảo giao diện hiển thị hoàn hảo trên điện thoại và máy tính bảng.
-  3. **Thanh Tab 5 chế độ dạng Viên nang (Pill Tabs):** Hiệu ứng chuyển động phát sáng gradient mượt mà (`#1971c2` $\to$ `#228be6`), độ nhạy hover cao, không bị gãy dòng chữ tiếng Việt.
-  4. **Nhận diện trạng thái Twin thông minh (`#status-badge`):** Khi chuyển sang chế độ mô phỏng hoặc chưa cắm phần cứng, badge chuyển sang tông màu Cam/Cyan tinh tế `🎮 Đang chạy mô phỏng 3D độc lập` kèm nhịp xung nhịp (pulse animation), xoá bỏ cảm giác "bị lỗi" trước đây.
-  5. **Bộ phím Jog công nghiệp xúc giác (Tactile 3D Buttons):** Nâng cấp đổ bóng 3D cơ học, hiệu ứng lún phím khi nhấn (`transform: translateY(1px)`), làm nổi bật phím trục $Z$ và phím Dừng khẩn cấp.
-  6. **Thẻ Dạy Điểm trực quan (`renderTeachList`):** Tích hợp huy hiệu số thứ tự bước `#1, #2` dạng pill, viền màu phân biệt kiểu di chuyển (`type-safe` viền xanh, `type-direct` viền cam) và hiệu ứng phát sáng xanh lá nhấp nháy khi bước đang chạy.
-  7. **Không gian Blockly co giãn thông minh & Nút Sao Chép:** Chiều cao `#blockly-wrapper` co giãn linh hoạt theo tỷ lệ màn hình `clamp(280px, 46vh, 420px)`; bổ sung nút **📋 Sao Chép** mã Python/JS 1-click vào clipboard.
-  8. **Nút Dừng Khẩn Cấp Toàn Cục trên Footer:** Nút `🛑 Dừng` (`.btn-estop`) cho phép ngắt mọi hoạt động ngay tức khắc từ bất kỳ Tab nào.
-  9. **Nhãn 3D HUD Kính Mờ (Glassmorphism):** Tọa độ đầu hút TCP và cọc tiêu đích 3D bo tròn dạng pill, nền kính mờ (`backdrop-filter: blur(8px)`) và viền neon phát sáng.
-- **Kết quả kiểm thử:** Đạt **171/171 Test Cases (100% Pass)** trên 6 bộ kiểm thử tự động.
+---
+
+#### ❌ Lỗi 3: Động cơ phát tiếng rên/rung ("è è") nhưng thanh ray đứng im (Stepper Stalling)
+* **Hiện tượng:** Sau khi chạy Homing xong, ra lệnh di chuyển (`--mm 150` hoặc `--jog`) thì động cơ chỉ kêu gừ gừ/rung lắc tại chỗ mà không quay.
+* **Nguyên nhân kỹ thuật:**
+  * **Tần số xung khởi động quá cao:** Lệnh `SetEMotorS` (ID 136) phát xung trực tiếp đến động cơ bước mà không có đường cong gia tốc mềm (S-curve ramp). Code ban đầu đặt mặc định `50 mm/s` (tương đương $10.000\text{ xung/giây}$). Động cơ bước mang tải nặng của cánh tay robot khi đang đứng yên không thể bắt kịp từ trường ở tần số $10\text{ kHz} \to$ sinh ra hiện tượng **mất bước / kẹt tần số (stalling)**.
+  * **Lệnh phanh dập tắt:** Hàm `close()` khi kết thúc script vô tình gọi `self.stop()`, dập tắt ngay động cơ khi vừa mới chớm quay.
+* **Cách khắc phục:**
+  * Cố định dải vận tốc vận hành tối ưu ở **$25 - 40\text{ mm/s}$ (tương đương $2.000 - 3.200\text{ xung/giây}$)**. Ở dải này, mô-men xoắn của động cơ đạt cực đại, kéo tải cánh tay robot êm ái, mạnh mẽ và không bao giờ kẹt bước.
+  * Loại bỏ lệnh gọi `stop()` cưỡng bức trong hàm đóng kết nối thông thường.
+
+---
+
+#### ❌ Lỗi 4: Tọa độ di chuyển bị sai lệch gấp 2.5 lần (Lệnh chạy 10 cm nhưng ray đi 25 cm)
+* **Hiện tượng:** Ra lệnh chạy $10\text{ cm}$ ($100\text{ mm}$), ray thực tế chạy vọt ra tận vạch $25 - 26\text{ cm}$.
+* **Nguyên nhân & Căn cứ cơ khí:**
+  * File cũ dùng thông số giả định `PULSES_PER_MM = 200`.
+  * Khi yêu cầu $100\text{ mm}$, máy phát: $100 \times 200 = 20.000\text{ xung}$.
+  * Cơ cấu thực tế của ray Dobot:
+    * Động cơ bước $1.8^\circ$ / bước = $200\text{ bước/vòng}$.
+    * Vi bước $1/16$ = $3.200\text{ xung/vòng}$.
+    * Puly đai GT2 20 răng (bước $2\text{ mm}$) = $40\text{ mm/vòng}$.
+    * Hệ số cơ khí chuẩn: $\frac{3.200\text{ xung}}{40\text{ mm}} = \mathbf{80\text{ xung / mm}}$.
+  * Kiểm chứng thực nghiệm: $\text{Quãng đường thực tế} = \frac{20.000\text{ xung}}{80\text{ xung/mm}} = 250\text{ mm} = \mathbf{25\text{ cm}}$ (khớp 100% với phép đo thước).
+* **Cách khắc phục:**
+  * Cập nhật hệ số chuẩn xác: `PULSES_PER_MM = 80`. Sau khi chỉnh, lệnh `--mm 100` đi đúng chính xác vạch $10\text{ cm}$ từng milimet.
+
+---
+
+#### ❌ Lỗi 5: Mất trạng thái vị trí (Homing State Loss) giữa các lần chạy lệnh CLI
+* **Hiện tượng:** Chạy `python3 dobot_rail_controller.py --home` thành công, nhưng khi gõ tiếp lệnh `python3 dobot_rail_controller.py --mm 150` thì bị báo lỗi "Cần chạy Homing trước".
+* **Nguyên nhân:** Biến `current_pos` lưu trong RAM của tiến trình Python bị giải phóng khi lệnh trước kết thúc.
+* **Cách khắc phục:**
+  * Tích hợp cơ chế tự động đọc/ghi vị trí vào file trạng thái ẩn `.rail_state.json`.
+  * Hỗ trợ lệnh chạy gộp: `python3 dobot_rail_controller.py --home --mm 150`.
+  * Bổ sung chế độ dòng lệnh tương tác trực tiếp (`-i`): giữ kết nối Serial liên tục để gõ lệnh điều khiển tức thì.
+
+---
+
+### 16.3. Bảng tra cứu lệnh điều khiển ray trượt (`dobot_rail_controller.py`)
+
+| Thao tác | Cú pháp lệnh | Mô tả chi tiết |
+| :--- | :--- | :--- |
+| **Về gốc Home** | `python3 dobot_rail_controller.py --home` | Tự động dò công tắc, phanh dừng và gán tọa độ $0.0\text{ mm}$ |
+| **Home rồi chạy ngay** | `python3 dobot_rail_controller.py --home --mm 150` | Về gốc xong tự động chạy thẳng ra vị trí $150\text{ mm}$ ($15\text{ cm}$) |
+| **Đi tới tọa độ mm** | `python3 dobot_rail_controller.py --mm 200` | Di chuyển đến tọa độ tuyệt đối $200\text{ mm}$ ($20\text{ cm}$) |
+| **Nhích tiến tương đối** | `python3 dobot_rail_controller.py --jog 50` | Nhích tiến thêm $5\text{ cm}$ so với vị trí hiện tại |
+| **Nhích lùi tương đối** | `python3 dobot_rail_controller.py --jog -50` | Nhích lùi lại $5\text{ cm}$ (tự ngắt nếu vô tình chạm switch) |
+| **Lùi về vạch gốc** | `python3 dobot_rail_controller.py --mm 0` | Chạy lùi về lại điểm $0.0\text{ mm}$ |
+| **Kiểm tra trạng thái** | `python3 dobot_rail_controller.py --status` | Xem vị trí hiện tại và mức logic của công tắc hành trình |
+| **Dừng khẩn cấp** | `python3 dobot_rail_controller.py --stop` | Ngắt xung và phanh khựng động cơ ngay lập tức |
+| **Giao diện tương tác** | `python3 dobot_rail_controller.py -i` | Giữ kết nối cổng COM, gõ số mm hoặc lệnh trực tiếp |
+
+---
+
+## 17. TÍCH HỢP MÔ HÌNH 3D & URDF RAY TRƯỢT VÀO HỆ THỐNG WEB LIVE SERVER (2026-10-03)
+
+### 17.1. Bối cảnh & Mục tiêu
+* **Yêu cầu:** 
+  1. Tạo các file mô tả robot URDF / Xacro chuẩn cho Dobot Magician kèm ray trượt Dobot Sliding Rail Kit (khớp prismatic hành trình $0 - 1000\text{ mm}$).
+  2. Dựng mô hình 3D chi tiết cao của ray trượt trong Three.js (thanh nhôm định hình 1120mm, 2 thanh ti dẫn hướng mạ crom $\varnothing 12\text{ mm}$, dây đai GT2, cụm động cơ NEMA 17, cữ chặn, công tắc hành trình có đèn LED và thước milimet).
+  3. Thêm nút chuyển đổi chế độ trên giao diện Web 3D:
+     * **`[ 🤖 Chỉ Dobot ]`**: Robot đứng độc lập trên bàn làm việc tại gốc $(0, 0, 0)$.
+     * **`[ 🛤️ Dobot + Ray trượt ]`**: Robot được gắn trên bàn trượt cơ khí, di chuyển mượt mà dọc theo trục $L$ ($0.0 - 1000.0\text{ mm}$).
+  4. Đồng bộ 2 chiều qua WebSocket với `dobot_live_server.py` với hệ số chuẩn xác $80\text{ xung/mm}$, tự động cập nhật vị trí $L$ và trạng thái công tắc hành trình trong telemetry.
+
+### 17.2. Các tệp tin đã tạo và cập nhật
+* **`dobot_sliding_rail.urdf`**: File URDF mô tả cấu trúc cơ khí độc lập của ray trượt (khớp `rail_joint` dạng prismatic, cự ly $0.0 - 1.0\text{ m}$, giới hạn lực và vận tốc, bàn trượt `rail_carriage_link` và mặt bích gá robot).
+* **`dobot_with_rail.urdf.xacro`**: File XACRO kết hợp toàn bộ cánh tay robot 4-DOF Dobot Magician với ray trượt 1-DOF thành hệ thống 5-DOF hoàn chỉnh theo chuẩn ROS/MoveIt.
+* **`dobot_live_server.py`**: Tích hợp các hàm điều khiển ray trượt (`rail_home`, `rail_move_to`, `rail_jog`, `rail_stop`, `get_rail_switch`), xử lý lệnh trong background thread để không chặn luồng mạng, nhúng trường `l`, `rail_switch`, `rail_homed` vào gói tin telemetry định kỳ 50ms.
+* **`dobot_visualizer.html` & `dist_netlify/index.html`**:
+  * Mô hình Three.js `createSlidingRailMesh()` chân thực với độ chi tiết cao, thước khắc laser milimet, đèn LED cữ hành trình đổi màu theo trạng thái cảm biến.
+  * Nút chuyển đổi chế độ `[ 🤖 Chỉ Dobot ]` $\longleftrightarrow$ `[ 🛤️ Dobot + Ray trượt ]`.
+  * Tab điều khiển riêng **🛤️ Ray Trượt**: phím Home ray, slider $0 - 1000\text{ mm}$, phím Jog $\pm 10/50\text{ mm}$, các mốc nhảy nhanh $0, 250, 500, 750, 1000\text{ mm}$, bộ chọn tốc độ $20 - 60\text{ mm/s}$.
+  * Tự động bù trừ tọa độ không gian 3D (`baseOffset`) cho điểm đích, vòng tâm ngắm và đường gióng rơi bám theo đế robot khi trượt dọc thanh ray.
+
+### 17.3. Khắc phục lỗi dừng ray & Mở rộng vùng an toàn di chuyển phối hợp (2026-10-03)
+* **Lỗi 1: Nhấn dừng ray ngoài đời thì dừng nhưng trong 3D Simulation vẫn tiếp tục chạy:**
+  * *Nguyên nhân:* Hàm `animateRailMove()` chạy qua vòng lặp `requestAnimationFrame(step)` không giữ ID hủy frame và không kiểm tra cờ dừng; đồng thời nút "Dừng ray" chỉ gửi `sendAction('rail_stop')` xuống server mà không ngắt hoạt hình client.
+  * *Khắc phục:* Thêm biến `railAnimationFrameId` và hàm `stopRailMotion()` gọi `cancelAnimationFrame(railAnimationFrameId)`, đặt `isRailAnimating = false`, ghim vị trí `updateRailPosition()` tức thời. Trong `ws.onmessage`, khi nhận telemetry `rail_moving === false`, client tự động hủy hoạt hình và snap vị trí thật.
+* **Lỗi 2: Đang chạy Homing ray mà nhấn Dừng thì chỉ khựng lại 1 chút rồi lại chạy tiếp:**
+  * *Nguyên nhân:* Hàm `DobotController.rail_home()` trong server chạy luồng nền có 2 vòng lặp lớn (Coarse search 65 bước và Fine search 30 bước). Lệnh dừng `rail_stop()` chỉ ngắt xung của phân đoạn hiện tại mà không thoát khỏi vòng lặp `for`, khiến vòng lặp tiếp tục phát xung cho bước tiếp theo.
+  * *Khắc phục:* Thêm cờ ngắt `self.stop_requested` vào `DobotController`. Khi gọi `rail_stop()`, bật `self.stop_requested = True`. Trong toàn bộ các vòng lặp coarse/fine search và thời gian chờ của `rail_home()` cũng như `rail_jog()`, kiểm tra liên tục `if self.stop_requested: self.rail_stop(); return False`. Đồng thời, nút Dừng khẩn cấp toàn hệ thống `emergency_stop()` cũng gọi kèm `self.rail_stop()`.
+* **Tính năng: Vùng an toàn mở rộng (Expanded Workspace) & Di chuyển phối hợp Ray + Dobot:**
+  * *Vùng an toàn mở rộng:* Nhờ có hành trình trượt $1000\text{ mm}$ của ray (Three.js $Z \in [-500, +500\text{ mm}]$), vùng làm việc an toàn của Dobot được mở rộng từ hình tròn bán kính $330\text{ mm}$ thành hình chữ nhật dạng sân vận động (stadium capsule envelope) dài $1660\text{ mm}$ dọc theo ray, với dải vươn an toàn trước mặt ray $X \in [140, 330\text{ mm}]$ và hai đầu bán nguyệt mở rộng.
+  * *Mô hình trực quan:* Tạo nhóm `railWorkspaceZoneGroup` trong Three.js hiển thị dải an toàn màu xanh cyan phát sáng trên sàn kèm viền cảnh báo đỏ cam khi bật chế độ Ray trượt.
+  * *Thuật toán định vị tối ưu & Di chuyển phối hợp 2 bước:*
+    1. Khi người dùng kéo "cục đích" 3D hoặc click chọn điểm dọc bàn làm việc:
+       $$L_{optimal} = \text{clamp}(Z_{world} + 500.0, 0.0, 1000.0)$$
+       $$Z_{carriage} = L_{optimal} - 500.0$$
+       $$X_{arm\_local} = X_{world},\quad Y_{arm\_local} = -(Z_{world} - Z_{carriage})$$
+       $$r_{arm\_local} = \sqrt{X_{arm\_local}^2 + Y_{arm\_local}^2}$$
+    2. Nếu $r_{arm\_local} < 140\text{ mm}$, $r_{arm\_local} > 330\text{ mm}$ hoặc $Z_{tcp} \notin [-120, 150\text{ mm}]$: Hệ thống hiển thị cảnh báo quá tầm và chặn không cho di chuyển.
+    3. Khi bấm **[📦 Nhấc An Toàn (Safe Jump)]** hoặc **[🚀 Bay Thẳng (Direct)]**:
+       * **Bước 1 (Di chuyển ray):** Ray trượt tự động chạy đến vị trí $L_{optimal}$ để đón cục đích.
+       * **Bước 2 (Di chuyển Dobot):** Cánh tay Dobot vươn chính xác đến tọa độ đích $(X_{arm\_local}, Y_{arm\_local}, Z_{tcp})$.
+
+
 
 

@@ -38,6 +38,7 @@
         #panel.panel-collapsed .panel-body,
         #panel.panel-collapsed .panel-footer,
         #panel.panel-collapsed .mode-toggle,
+        #panel.panel-collapsed .setup-mode-toggle,
         #panel.panel-collapsed .nav-tabs,
         #panel.panel-collapsed #status-badge,
         #panel.panel-collapsed #alarm-banner {
@@ -99,6 +100,21 @@
             color: #cbd5e1; font-weight: 700; border-radius: 6px; cursor: pointer; transition: 0.2s; font-size: 11.5px;
         }
         .mode-btn.active { background: #339af0; color: #ffffff; }
+
+        .setup-mode-toggle {
+            display: flex; background: #161a24; border-radius: 8px; padding: 2px;
+            margin-top: 6px; border: 1px solid rgba(255, 255, 255, 0.08); gap: 3px;
+        }
+        .setup-mode-toggle .mode-btn {
+            flex: 1; padding: 6px 4px; text-align: center; border: none; background: transparent;
+            color: #cbd5e1; font-weight: 700; border-radius: 6px; cursor: pointer; transition: 0.2s; font-size: 11.5px;
+        }
+        .setup-mode-toggle .mode-btn:hover { color: #ffffff; background: rgba(255, 255, 255, 0.08); }
+        .setup-mode-toggle .mode-btn.active {
+            background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
+            color: #ffffff; font-weight: 800;
+            box-shadow: 0 2px 8px rgba(14, 165, 233, 0.35);
+        }
 
         .nav-tabs {
             display: flex; background: rgba(0, 0, 0, 0.55); border-radius: 8px;
@@ -711,10 +727,21 @@
                 <button id="btn-mode-manual" class="mode-btn" onclick="setMode('manual')">🎮 Mô phỏng (Manual)</button>
             </div>
 
+            <!-- CHỌN CẤU HÌNH THIẾT BỊ: 1 MÌNH DOBOT vs DOBOT + RAY TRƯỢT -->
+            <div class="setup-mode-toggle" title="Chọn cấu hình phần cứng: Robot đứng độc lập hoặc gắn trên ray trượt">
+                <button id="btn-setup-standalone" class="mode-btn active" onclick="setRobotSetupMode('standalone')" title="Chế độ Dobot độc lập trên bàn làm việc">
+                    🤖 Chỉ Dobot
+                </button>
+                <button id="btn-setup-rail" class="mode-btn" onclick="setRobotSetupMode('rail')" title="Chế độ Dobot gắn trên ray trượt tuyến tính (Sliding Rail Kit 1000mm)">
+                    🛤️ Dobot + Ray trượt
+                </button>
+            </div>
+
             <!-- TAB NAVIGATION -->
             <div class="nav-tabs">
                 <button id="tab-nav-target" class="nav-tab active" onclick="switchTab('target')">🎯 Điểm Đích</button>
                 <button id="tab-nav-jog" class="nav-tab" onclick="switchTab('jog')">🕹️ Điều Khiển</button>
+                <button id="tab-nav-rail" class="nav-tab" onclick="switchTab('rail')" style="display: none;" title="Bảng điều khiển ray trượt trục L">🛤️ Ray Trượt</button>
                 <button id="tab-nav-teach" class="nav-tab" onclick="switchTab('teach')">📋 Dạy Điểm</button>
                 <button id="tab-nav-blockly" class="nav-tab" onclick="switchTab('blockly')">🧩 Blockly</button>
                 <button id="tab-nav-monitor" class="nav-tab" onclick="switchTab('monitor')">📊 Giám Sát</button>
@@ -774,6 +801,12 @@
                     ✅ Trong tầm với an toàn (Bán kính: 250.0 mm)
                 </div>
 
+                <!-- Tọa độ Ray trượt L hiện tại (Chỉ hiện khi ở chế độ Dobot + Ray trượt) -->
+                <div id="target-rail-info" style="display: none; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 6px; padding: 6px 10px; margin-top: 6px; font-size: 11.5px; justify-content: space-between; align-items: center;">
+                    <span>🛤️ Vị trí Ray (L): <b id="target-rail-l-display" style="color: #38bdf8; font-size: 13px;">0.0 mm</b></span>
+                    <button onclick="switchTab('rail')" style="background: #0284c7; border: none; border-radius: 4px; color: #fff; font-size: 10.5px; font-weight: bold; padding: 3px 8px; cursor: pointer;">Chỉnh Ray ➔</button>
+                </div>
+
                 <div class="btn-row" style="margin-top: 8px;">
                     <button class="btn-action btn-safe-jump" onclick="executeGoToPoint('safe')" title="Nhấc đầu hút lên cao -> Bay ngang -> Hạ xuống đích">📦 Nhấc An Toàn (Safe Jump)</button>
                     <button class="btn-action btn-direct-ptp" onclick="executeGoToPoint('direct')" title="Bay thẳng trực tiếp tới điểm">🚀 Bay Thẳng (Direct)</button>
@@ -819,6 +852,20 @@
                         <button class="btn-jog" onclick="doJog('r', 1)" title="Xoay ngược chiều kim đồng hồ">↺ R+</button>
                         <button class="btn-jog" onclick="doJog('r', -1)" title="Xoay theo chiều kim đồng hồ">↻ R-</button>
                         <button class="btn-jog btn-jog-stop" onclick="sendAction('emergency_stop')" title="Dừng khẩn cấp">🛑 DỪNG</button>
+                    </div>
+
+                    <!-- Jog Ray Trượt (Trục L) - Tự động hiển thị khi ở chế độ Dobot + Ray trượt -->
+                    <div id="rail-jog-row" style="display: none; margin-top: 10px; border-top: 1px dashed rgba(255,255,255,0.12); padding-top: 8px;">
+                        <div style="font-weight: 700; color: #38bdf8; font-size: 11px; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>🛤️ TRỤC RAY L: <b id="quick-rail-l-val" style="color: #7dd3fc; font-size: 12px;">0.0 mm</b></span>
+                            <button class="btn-sync-pose" onclick="triggerRailHome()" style="padding: 2px 7px; font-size: 10px; color: #38bdf8; border-color: rgba(56,189,248,0.3);">🏠 Home Ray</button>
+                        </div>
+                        <div style="display: flex; gap: 4px;">
+                            <button class="btn-jog" onclick="doRailJog(-50)" style="flex: 1; padding: 7px 2px; font-size: 11px; font-weight: bold; background: #1a2333;">◀ L- 50</button>
+                            <button class="btn-jog" onclick="doRailJog(-10)" style="flex: 1; padding: 7px 2px; font-size: 11px; font-weight: bold; background: #1a2333;">◀ L- 10</button>
+                            <button class="btn-jog" onclick="doRailJog(10)" style="flex: 1; padding: 7px 2px; font-size: 11px; font-weight: bold; background: #1a2333;">L+ 10 ▶</button>
+                            <button class="btn-jog" onclick="doRailJog(50)" style="flex: 1; padding: 7px 2px; font-size: 11px; font-weight: bold; background: #1a2333;">L+ 50 ▶</button>
+                        </div>
                     </div>
                 </div>
 
@@ -866,6 +913,16 @@
                                 <button class="btn-nudge" onclick="nudgeSlider('cart-r', -1)">-</button>
                                 <input type="range" id="cart-r" min="-135" max="135" value="0" step="1">
                                 <button class="btn-nudge" onclick="nudgeSlider('cart-r', 1)">+</button>
+                            </div>
+                        </div>
+
+                        <!-- Thanh trượt Trục L Ray trượt (Chỉ hiện khi ở chế độ Dobot + Ray trượt) -->
+                        <div class="control-group" id="rail-cartesian-group" style="display: none; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 6px; padding: 6px 8px; margin-top: 6px;">
+                            <label style="color: #38bdf8; font-weight: 700;"><span>Trục L (Ray trượt):</span> <span class="badge-val" id="cart-l-val" style="color: #38bdf8; font-weight: 800;">0 mm</span></label>
+                            <div class="slider-row">
+                                <button class="btn-nudge" onclick="nudgeRailSlider(-10)">-10</button>
+                                <input type="range" id="cart-l" min="0" max="1000" value="0" step="1" oninput="onRailSliderInput(this.value)" onchange="onRailSliderChange(this.value)" style="accent-color: #38bdf8;">
+                                <button class="btn-nudge" onclick="nudgeRailSlider(10)">+10</button>
                             </div>
                         </div>
 
@@ -919,6 +976,98 @@
 
                         <button class="btn-action btn-send-move" style="width: 100%; margin-top: 8px;" onclick="sendMoveToRobot()">🚀 GỬI GÓC KHỚP TỚI ROBOT THẬT</button>
                     </div>
+                </div>
+            </div>
+
+            <!-- TAB: RAY TRƯỢT (SLIDING RAIL KIT - TRỤC L 1000MM) -->
+            <div id="tab-pane-rail" style="display: none;">
+                <!-- CARD 1: TRẠNG THÁI HIỆN TẠI CỦA RAY TRƯỢT -->
+                <div class="data-card" style="margin-top: 0; background: linear-gradient(145deg, #182030, #121620); border: 1px solid rgba(56, 189, 248, 0.25);">
+                    <div style="font-weight: 800; margin-bottom: 8px; color: #38bdf8; display: flex; justify-content: space-between; align-items: center;">
+                        <span>🛤️ TRỤC TRƯỢT L (0 - 1000 mm)</span>
+                        <span id="rail-state-badge" style="font-size: 11px; padding: 2px 8px; border-radius: 12px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">Chuẩn 80 xung/mm</span>
+                    </div>
+                    
+                    <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px;">
+                        <span style="font-size: 12px; color: #94a3b8;">Vị trí hiện tại:</span>
+                        <div>
+                            <span id="rail-curr-pos-mm" style="font-size: 24px; font-weight: 900; color: #38bdf8; font-family: monospace;">0.0</span>
+                            <span style="font-size: 13px; color: #94a3b8; font-weight: 700;"> mm</span>
+                            <span id="rail-curr-pos-cm" style="font-size: 13px; color: #64748b; margin-left: 4px;">(0.0 cm)</span>
+                        </div>
+                    </div>
+
+                    <!-- Trạng thái công tắc hành trình GP2 -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 6px 10px; margin-top: 6px;">
+                        <span style="font-size: 11.5px; color: #cbd5e1;">Cảm biến gốc (GP2 Chân 3 - EIO14):</span>
+                        <span id="rail-switch-badge" style="font-size: 11px; font-weight: 700; color: #2ed573; display: flex; align-items: center; gap: 5px;">
+                            <span style="width: 7px; height: 7px; border-radius: 50%; background: #2ed573; display: inline-block;"></span> Nhả (0)
+                        </span>
+                    </div>
+
+                    <!-- Phím chức năng Homing & Emergency Stop -->
+                    <div style="display: flex; gap: 6px; margin-top: 10px;">
+                        <button class="btn-action" onclick="triggerRailHome()" style="flex: 2; background: linear-gradient(135deg, #0284c7, #0ea5e9); border-color: #38bdf8; color: #fff; font-weight: 700; padding: 8px;">
+                            🏠 Dò Gốc Tự Động (Home Ray)
+                        </button>
+                        <button class="btn-action" onclick="stopRailMotion()" style="flex: 1; background: rgba(224, 49, 49, 0.2); border-color: #ff6b6b; color: #ff8787; font-weight: 700; padding: 8px;">
+                            🛑 Dừng Ray
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CARD 2: THANH TRƯỢT ĐIỀU KHIỂN TRỰC QUAN -->
+                <div class="control-group" style="margin-top: 12px;">
+                    <label style="color: #f1f5f9; font-weight: 700; font-size: 12px; display: flex; justify-content: space-between;">
+                        <span>Kéo thanh trượt vị trí L:</span>
+                        <span id="rail-slider-val" style="color: #38bdf8; font-weight: 800;">0 mm</span>
+                    </label>
+                    <div class="slider-row" style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                        <button class="btn-nudge" onclick="nudgeRailSlider(-10)" style="padding: 4px 10px; font-weight: bold;">-10</button>
+                        <input type="range" id="rail-slider" min="0" max="1000" value="0" step="1" oninput="onRailSliderInput(this.value)" onchange="onRailSliderChange(this.value)" style="flex: 1; accent-color: #38bdf8;">
+                        <button class="btn-nudge" onclick="nudgeRailSlider(10)" style="padding: 4px 10px; font-weight: bold;">+10</button>
+                    </div>
+                </div>
+
+                <!-- CARD 3: PHÍM JOG RAY TRƯỢT -->
+                <div style="margin-top: 12px;">
+                    <span style="font-weight: 700; color: #cbd5e1; font-size: 11.5px;">Phím Jog Nhanh (±mm):</span>
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin-top: 6px;">
+                        <button class="btn-preset" onclick="doRailJog(-50)" style="font-weight: 700; background: #1e2433; padding: 7px 2px;">◀ Lùi 50mm</button>
+                        <button class="btn-preset" onclick="doRailJog(-10)" style="font-weight: 700; background: #1e2433; padding: 7px 2px;">◀ Lùi 10mm</button>
+                        <button class="btn-preset" onclick="doRailJog(10)" style="font-weight: 700; background: #1e2433; padding: 7px 2px;">Tiến 10mm ▶</button>
+                        <button class="btn-preset" onclick="doRailJog(50)" style="font-weight: 700; background: #1e2433; padding: 7px 2px;">Tiến 50mm ▶</button>
+                    </div>
+                </div>
+
+                <!-- CARD 4: ĐIỂM CỰ LY MẪU NHANH (PRESETS) -->
+                <div style="margin-top: 12px;">
+                    <span style="font-weight: 700; color: #cbd5e1; font-size: 11.5px;">Điểm Mốc Ray Nhanh:</span>
+                    <div class="preset-grid" style="grid-template-columns: repeat(5, 1fr); margin-top: 6px; gap: 4px;">
+                        <button class="btn-preset" onclick="moveToRailMm(0)">0 mm<br><span style="font-size: 9px; opacity: 0.7;">(Gốc)</span></button>
+                        <button class="btn-preset" onclick="moveToRailMm(250)">250 mm<br><span style="font-size: 9px; opacity: 0.7;">(1/4)</span></button>
+                        <button class="btn-preset" onclick="moveToRailMm(500)">500 mm<br><span style="font-size: 9px; opacity: 0.7;">(Giữa)</span></button>
+                        <button class="btn-preset" onclick="moveToRailMm(750)">750 mm<br><span style="font-size: 9px; opacity: 0.7;">(3/4)</span></button>
+                        <button class="btn-preset" onclick="moveToRailMm(1000)">1000 mm<br><span style="font-size: 9px; opacity: 0.7;">(Max)</span></button>
+                    </div>
+                </div>
+
+                <!-- CARD 5: TÙY CHỌN TỐC ĐỘ RAY -->
+                <div style="margin-top: 12px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 11.5px; color: #94a3b8; font-weight: 600;">Tốc độ chạy ray:</span>
+                        <span id="rail-speed-label" style="font-size: 12px; color: #38bdf8; font-weight: 700;">40 mm/s (Khuyên dùng)</span>
+                    </div>
+                    <div style="display: flex; gap: 4px;">
+                        <button class="btn-step" data-railspeed="20" onclick="setRailSpeed(20)">20 mm/s</button>
+                        <button class="btn-step" data-railspeed="30" onclick="setRailSpeed(30)">30 mm/s</button>
+                        <button class="btn-step active" data-railspeed="40" onclick="setRailSpeed(40)">40 mm/s</button>
+                        <button class="btn-step" data-railspeed="60" onclick="setRailSpeed(60)">60 mm/s</button>
+                    </div>
+                </div>
+
+                <div class="note" style="margin-top: 10px; background: rgba(56, 189, 248, 0.08); border-color: rgba(56, 189, 248, 0.2);">
+                    💡 Khi ở chế độ mô phỏng, kéo thanh trượt hoặc click các nút để xem cánh tay Dobot lướt trên thanh ray 3D!
                 </div>
             </div>
 
@@ -1153,6 +1302,13 @@
                     <div class="data-row"><span>Bán kính ngang (R):</span> <span class="val-sub" id="tcp-radius">210.00 mm</span></div>
                     <div class="data-row"><span>Khoảng cách 3D (D):</span> <span class="val-sub" id="tcp-dist3d">220.35 mm</span></div>
                     <div class="data-row"><span>Cao độ so mặt bàn:</span> <span class="val-sub" id="tcp-floor">204.74 mm</span></div>
+
+                    <!-- THÔNG SỐ RAY TRƯỢT L (CHỈ HIỆN KHI Ở CHẾ ĐỘ DOBOT + RAY TRƯỢT) -->
+                    <div id="monitor-rail-section" style="display: none;">
+                        <hr style="border: 0; border-top: 1px dashed rgba(255,255,255,0.12); margin: 6px 0;">
+                        <div class="data-row"><span>Tọa độ Ray L:</span> <span class="val-sub" id="mon-rail-pos" style="color: #38bdf8; font-weight: bold;">0.0 mm</span></div>
+                        <div class="data-row"><span>Cảm biến hành trình GP2:</span> <span class="val-sub" id="mon-rail-switch" style="color: #2ed573; font-weight: bold;">🟢 Nhả (0)</span></div>
+                    </div>
                 </div>
 
                 <div class="control-group" style="margin-top: 10px;">
@@ -1304,6 +1460,217 @@
         const matSiliconeWhite = new THREE.MeshStandardMaterial({ color: 0xfafafa, roughness: 0.4, metalness: 0.1, transparent: true, opacity: 0.95 });
         const matBrass = new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.35, metalness: 0.85 });
         const matTube = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, transparent: true, opacity: 0.85 });
+
+        // VẬT LIỆU RAY TRƯỢT (SLIDING RAIL KIT)
+        const matChromeShaft = new THREE.MeshStandardMaterial({ color: 0xf5f7fa, roughness: 0.12, metalness: 0.96 });
+        const matBeltRubber = new THREE.MeshStandardMaterial({ color: 0x181a1f, roughness: 0.85, metalness: 0.1 });
+        const matRailAlu = new THREE.MeshStandardMaterial({ color: 0xadb5bd, roughness: 0.35, metalness: 0.82 });
+        const matRailDarkPlate = new THREE.MeshStandardMaterial({ color: 0x1e232e, roughness: 0.45, metalness: 0.65 });
+        const matDobotBlueAcc = new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.25, metalness: 0.6 });
+
+        // TRẠNG THÁI RAY TRƯỢT
+        let isRailModeActive = false;
+        let currentRailL = 0.0;
+        let railSwitchState = 0;
+        let railSpeedMmS = 40.0;
+        let isInteractingWithRailSlider = false;
+        let isRailAnimating = false;
+        let railAnimationFrameId = null;
+        let railGroup = null;
+        let railCarriage = null;
+        let railSwitchLed = null;
+
+        // --- HÀM TẠO MÔ HÌNH 3D RAY TRƯỢT (SLIDING RAIL KIT) ---
+        function createSlidingRailMesh() {
+            railGroup = new THREE.Group();
+            scene.add(railGroup);
+
+            // 1. Thân ray nhôm định hình 1120 x 140 x 26 mm
+            const railBaseGeom = new THREE.BoxGeometry(140, 26, 1120);
+            const railBase = new THREE.Mesh(railBaseGeom, matRailAlu);
+            railBase.position.set(0, 13, 0);
+            railBase.castShadow = true;
+            railBase.receiveShadow = true;
+            railGroup.add(railBase);
+
+            // Rãnh giữa dẫn hướng dây đai GT2
+            const beltSlot = new THREE.Mesh(new THREE.BoxGeometry(28, 8, 1090), matRailDarkPlate);
+            beltSlot.position.set(0, 23, 0);
+            railGroup.add(beltSlot);
+
+            // Rãnh T-slot 2 bên hông ray
+            for (let side of [-1, 1]) {
+                const tSlot = new THREE.Mesh(new THREE.BoxGeometry(4, 8, 1110), matRailDarkPlate);
+                tSlot.position.set(side * 69, 13, 0);
+                railGroup.add(tSlot);
+            }
+
+            // 2. Hai thanh ti trượt dẫn hướng mạ crom phi 12mm (Length 1100mm)
+            const shaftGeom = new THREE.CylinderGeometry(6, 6, 1100, 24);
+            for (let side of [-1, 1]) {
+                const shaft = new THREE.Mesh(shaftGeom, matChromeShaft);
+                shaft.rotation.x = Math.PI / 2;
+                shaft.position.set(side * 45, 24, 0);
+                shaft.castShadow = true;
+                railGroup.add(shaft);
+
+                // 4 Gối đỡ trục nhôm (SK12 style) ở 2 đầu
+                for (let endZ of [-540, 540]) {
+                    const block = new THREE.Mesh(new THREE.BoxGeometry(22, 14, 20), matAluSilver);
+                    block.position.set(side * 45, 20, endZ);
+                    railGroup.add(block);
+                }
+            }
+
+            // 3. Dây đai curoa GT2 răng cao su đen mờ
+            const belt = new THREE.Mesh(new THREE.BoxGeometry(10, 2, 1060), matBeltRubber);
+            belt.position.set(0, 24, 0);
+            railGroup.add(belt);
+
+            // 4. Cụm Động cơ bước NEMA 17 tại đầu gốc (Z = -535mm)
+            const motorMount = new THREE.Mesh(new THREE.BoxGeometry(110, 36, 40), matRailDarkPlate);
+            motorMount.position.set(0, 18, -535);
+            railGroup.add(motorMount);
+
+            const motorNema = new THREE.Mesh(new THREE.BoxGeometry(42, 42, 40), matDarkMotor);
+            motorNema.position.set(0, 21, -540);
+            motorNema.castShadow = true;
+            railGroup.add(motorNema);
+
+            const motorFlange = new THREE.Mesh(new THREE.CylinderGeometry(16, 16, 4, 24), matAluSilver);
+            motorFlange.rotation.x = Math.PI / 2;
+            motorFlange.position.set(0, 21, -518);
+            railGroup.add(motorFlange);
+
+            const pulley = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 14, 24), matAluSilver);
+            pulley.rotation.z = Math.PI / 2;
+            pulley.position.set(0, 24, -510);
+            railGroup.add(pulley);
+
+            // 5. Cụm Puly căng đai tại đầu đối diện (Z = +535mm)
+            const idlerBlock = new THREE.Mesh(new THREE.BoxGeometry(70, 28, 35), matRailDarkPlate);
+            idlerBlock.position.set(0, 17, 535);
+            railGroup.add(idlerBlock);
+
+            const idlerPulley = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 14, 24), matAluSilver);
+            idlerPulley.rotation.z = Math.PI / 2;
+            idlerPulley.position.set(0, 24, 525);
+            railGroup.add(idlerPulley);
+
+            // 6. Tấm chặn 2 đầu ray (End plates)
+            for (let endZ of [-560, 560]) {
+                const endPlate = new THREE.Mesh(new THREE.BoxGeometry(142, 28, 6), matRailDarkPlate);
+                endPlate.position.set(0, 14, endZ);
+                railGroup.add(endPlate);
+            }
+
+            // 7. Cụm Công tắc hành trình GP2 (EIO14) tại gốc Z = -495mm
+            const switchBody = new THREE.Mesh(new THREE.BoxGeometry(12, 16, 20), matDarkMotor);
+            switchBody.position.set(-58, 22, -495);
+            railGroup.add(switchBody);
+
+            const switchLever = new THREE.Mesh(new THREE.BoxGeometry(1.5, 10, 18), matBrass);
+            switchLever.position.set(-51, 23, -492);
+            switchLever.rotation.y = 0.2;
+            railGroup.add(switchLever);
+
+            // Đèn LED cữ hành trình (Đỏ khi chạm, Xanh khi nhả)
+            railSwitchLed = new THREE.Mesh(
+                new THREE.SphereGeometry(3, 14, 14),
+                new THREE.MeshStandardMaterial({ color: 0x2ed573, emissive: 0x00cc44, roughness: 0.2 })
+            );
+            railSwitchLed.position.set(-58, 31, -495);
+            railGroup.add(railSwitchLed);
+
+            // 8. Thước đo milimet khắc laser dọc theo mép trước thanh ray
+            const rulerCanvas = document.createElement('canvas');
+            rulerCanvas.width = 2048;
+            rulerCanvas.height = 64;
+            const ctx = rulerCanvas.getContext('2d');
+            ctx.fillStyle = "#cbd5e1";
+            ctx.fillRect(0, 0, 2048, 64);
+            ctx.fillStyle = "#0f172a";
+            ctx.fillRect(0, 48, 2048, 3);
+            ctx.font = "bold 18px monospace";
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#0f172a";
+
+            const padX = 64;
+            const usableW = 2048 - padX * 2;
+            for (let m = 0; m <= 1000; m += 10) {
+                const px = padX + (m / 1000) * usableW;
+                if (m % 100 === 0) {
+                    ctx.fillRect(px - 1.2, 18, 2.4, 30);
+                    ctx.fillText(`${m}`, px, 15);
+                } else if (m % 50 === 0) {
+                    ctx.fillRect(px - 0.75, 30, 1.5, 18);
+                } else {
+                    ctx.fillRect(px - 0.5, 38, 1, 10);
+                }
+            }
+            const rulerTex = new THREE.CanvasTexture(rulerCanvas);
+            rulerTex.anisotropy = 4;
+            const rulerMat = new THREE.MeshBasicMaterial({ map: rulerTex });
+            const rulerPlane = new THREE.Mesh(new THREE.PlaneGeometry(1000, 18), rulerMat);
+            rulerPlane.position.set(70.5, 16, 0);
+            rulerPlane.rotation.y = Math.PI / 2;
+            railGroup.add(rulerPlane);
+
+            // 9. BÀN TRƯỢT MANG ĐẾ DOBOT (Carriage Plate 170 x 170 x 18 mm)
+            railCarriage = new THREE.Group();
+            railGroup.add(railCarriage);
+
+            const carriagePlate = new THREE.Mesh(new THREE.BoxGeometry(170, 18, 170), matRailDarkPlate);
+            carriagePlate.position.set(0, 35, 0);
+            carriagePlate.castShadow = true;
+            carriagePlate.receiveShadow = true;
+            railCarriage.add(carriagePlate);
+
+            // 4 Gối trượt bi tuyến tính (SC12UU style) dưới gầm bàn trượt
+            for (let sx of [-45, 45]) {
+                for (let sz of [-50, 50]) {
+                    const bearing = new THREE.Mesh(new THREE.BoxGeometry(28, 16, 36), matAluSilver);
+                    bearing.position.set(sx, 23, sz);
+                    railCarriage.add(bearing);
+                }
+            }
+
+            // Gờ định vị đế chân cao su của Dobot Magician
+            for (let sx of [-65, 65]) {
+                for (let sz of [-65, 65]) {
+                    const padRing = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, 2, 20), matDobotBlueAcc);
+                    padRing.position.set(sx, 44.5, sz);
+                    railCarriage.add(padRing);
+                }
+            }
+
+            // Viền chỉ xanh Dobot Blue trang trí trước và sau bàn trượt
+            for (let sz of [-85.5, 85.5]) {
+                const trim = new THREE.Mesh(new THREE.BoxGeometry(150, 4, 2), matDobotBlueAcc);
+                trim.position.set(0, 35, sz);
+                railCarriage.add(trim);
+            }
+
+            // Cữ kim loại chạm công tắc hành trình bên hông bàn trượt
+            const tripFlag = new THREE.Mesh(new THREE.BoxGeometry(6, 12, 14), matBrass);
+            tripFlag.position.set(-52, 24, 0);
+            railCarriage.add(tripFlag);
+
+            // Mũi tên chỉ thị vị trí mm trên thước
+            const arrowIndicator = new THREE.Mesh(new THREE.ConeGeometry(4, 8, 4), matDobotBlueAcc);
+            arrowIndicator.position.set(72, 28, 0);
+            arrowIndicator.rotation.z = -Math.PI / 2;
+            railCarriage.add(arrowIndicator);
+
+            // Khởi tạo ở vị trí 0mm
+            railCarriage.position.set(0, 0, -500);
+
+            // Mặc định ẩn ray trượt (khởi động ở chế độ Standalone Dobot)
+            railGroup.visible = false;
+        }
+
+        // Tạo mô hình 3D ray trượt
+        createSlidingRailMesh();
 
         // --- CƠ CẤU ROBOT ---
         const robotRoot = new THREE.Group();
@@ -1639,6 +2006,81 @@
         workspaceZoneGroup.add(outerLimitRing);
 
         // ========================================================
+        // VÙNG LÀM VIỆC AN TOÀN MỞ RỘNG CHO RAY TRƯỢT (RAIL WORKSPACE ENVELOPE)
+        // ========================================================
+        const railWorkspaceZoneGroup = new THREE.Group();
+        scene.add(railWorkspaceZoneGroup);
+
+        const railZoneMat = new THREE.MeshBasicMaterial({
+            color: 0x0ea5e9,
+            transparent: true,
+            opacity: 0.14,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+
+        // 1. Dải chữ nhật phẳng trước mặt ray 1000mm (Z: -500 đến +500, X: 140 đến 330)
+        const railCorridorGeom = new THREE.PlaneGeometry(190, 1000);
+        const railCorridorMesh = new THREE.Mesh(railCorridorGeom, railZoneMat);
+        railCorridorMesh.rotation.x = -Math.PI / 2;
+        railCorridorMesh.position.set(235, 0.2, 0);
+        railWorkspaceZoneGroup.add(railCorridorMesh);
+
+        // 2. Hai đầu bán nguyệt mở rộng tại Z = +500 (End of Rail) và Z = -500 (Homing Switch)
+        const capGeomPos = new THREE.RingGeometry(140, 330, 32, 1, -Math.PI / 2, Math.PI / 2);
+        const capMeshPos = new THREE.Mesh(capGeomPos, railZoneMat);
+        capMeshPos.rotation.x = -Math.PI / 2;
+        capMeshPos.position.set(0, 0.2, 500);
+        railWorkspaceZoneGroup.add(capMeshPos);
+
+        const capGeomNeg = new THREE.RingGeometry(140, 330, 32, 1, 0, Math.PI / 2);
+        const capMeshNeg = new THREE.Mesh(capGeomNeg, railZoneMat);
+        capMeshNeg.rotation.x = -Math.PI / 2;
+        capMeshNeg.position.set(0, 0.2, -500);
+        railWorkspaceZoneGroup.add(capMeshNeg);
+
+        // 3. Đường biên viền ngoài X=330mm (Màu xanh cyan sáng)
+        const outerRailLineMat = new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.85 });
+        const outerLinePts = [
+            new THREE.Vector3(330, 0.3, -500),
+            new THREE.Vector3(330, 0.3, 500)
+        ];
+        for (let a = 0; a <= Math.PI / 2; a += 0.05) {
+            outerLinePts.push(new THREE.Vector3(330 * Math.cos(a), 0.3, 500 + 330 * Math.sin(a)));
+        }
+        const outerRailLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(outerLinePts), outerRailLineMat);
+        railWorkspaceZoneGroup.add(outerRailLine);
+
+        const outerLinePtsNeg = [];
+        for (let a = 0; a <= Math.PI / 2; a += 0.05) {
+            outerLinePtsNeg.push(new THREE.Vector3(330 * Math.cos(a), 0.3, -500 - 330 * Math.sin(a)));
+        }
+        const outerRailLineNeg = new THREE.Line(new THREE.BufferGeometry().setFromPoints(outerLinePtsNeg), outerRailLineMat);
+        railWorkspaceZoneGroup.add(outerRailLineNeg);
+
+        // 4. Đường biên viền trong X=140mm (Màu đỏ cam cảnh báo)
+        const innerRailLineMat = new THREE.LineBasicMaterial({ color: 0xff6b6b, transparent: true, opacity: 0.85 });
+        const innerLinePts = [
+            new THREE.Vector3(140, 0.3, -500),
+            new THREE.Vector3(140, 0.3, 500)
+        ];
+        for (let a = 0; a <= Math.PI / 2; a += 0.05) {
+            innerLinePts.push(new THREE.Vector3(140 * Math.cos(a), 0.3, 500 + 140 * Math.sin(a)));
+        }
+        const innerRailLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints(innerLinePts), innerRailLineMat);
+        railWorkspaceZoneGroup.add(innerRailLine);
+
+        const innerLinePtsNeg = [];
+        for (let a = 0; a <= Math.PI / 2; a += 0.05) {
+            innerLinePtsNeg.push(new THREE.Vector3(140 * Math.cos(a), 0.3, -500 - 140 * Math.sin(a)));
+        }
+        const innerRailLineNeg = new THREE.Line(new THREE.BufferGeometry().setFromPoints(innerLinePtsNeg), innerRailLineMat);
+        railWorkspaceZoneGroup.add(innerRailLineNeg);
+
+        // Mặc định ẩn vì khởi động ở chế độ Standalone
+        railWorkspaceZoneGroup.visible = false;
+
+        // ========================================================
         // TÂM NGẮM CHUỘT HOVER KHI CHỌN ĐIỂM (HOVER RETICLE)
         // ========================================================
         const hoverReticle = new THREE.Group();
@@ -1777,21 +2219,26 @@
                 document.getElementById('j4-val').innerText = j4Deg.toFixed(1) + '°';
             }
 
-            const tcpWorldPos = new THREE.Vector3(x, floorHeight, -y);
+            const baseOffset = isRailModeActive ? new THREE.Vector3(0, 44, currentRailL - 500) : new THREE.Vector3(0, 0, 0);
+            const tcpWorldPos = new THREE.Vector3(x + baseOffset.x, floorHeight + baseOffset.y, -y + baseOffset.z);
             tcpMarker.position.copy(tcpWorldPos);
 
+            if (workspaceZoneGroup) {
+                workspaceZoneGroup.position.copy(baseOffset);
+            }
+
             if (showProjections) {
-                const pts = [tcpWorldPos, new THREE.Vector3(x, 0.5, -y)];
+                const pts = [tcpWorldPos, new THREE.Vector3(x + baseOffset.x, 0.5, -y + baseOffset.z)];
                 dropLine.geometry.setFromPoints(pts);
                 dropLine.computeLineDistances();
                 dropLine.visible = true;
 
-                groundReticle.position.set(x, 0.5, -y);
-                groundPoint.position.set(x, 0.5, -y);
+                groundReticle.position.set(x + baseOffset.x, 0.5, -y + baseOffset.z);
+                groundPoint.position.set(x + baseOffset.x, 0.5, -y + baseOffset.z);
                 groundReticle.visible = true;
                 groundPoint.visible = true;
 
-                radiusLine.geometry.setFromPoints([new THREE.Vector3(0, 0.5, 0), new THREE.Vector3(x, 0.5, -y)]);
+                radiusLine.geometry.setFromPoints([new THREE.Vector3(baseOffset.x, 0.5, baseOffset.z), new THREE.Vector3(x + baseOffset.x, 0.5, -y + baseOffset.z)]);
                 radiusLine.visible = true;
             } else {
                 dropLine.visible = false;
@@ -2071,7 +2518,7 @@
         }
 
         function switchTab(tabId) {
-            const tabs = ['target', 'jog', 'teach', 'blockly', 'monitor'];
+            const tabs = ['target', 'jog', 'rail', 'teach', 'blockly', 'monitor'];
             const panel = document.getElementById('panel');
 
             tabs.forEach(t => {
@@ -2168,6 +2615,270 @@
             }
         }
 
+        // ========================================================
+        // ĐIỀU KHIỂN CẤU HÌNH THIẾT BỊ: CHỈ DOBOT vs DOBOT + RAY TRƯỢT
+        // ========================================================
+        function setRobotSetupMode(mode) {
+            isRailModeActive = (mode === 'rail');
+            
+            const btnStandalone = document.getElementById('btn-setup-standalone');
+            const btnRail = document.getElementById('btn-setup-rail');
+            const tabNavRail = document.getElementById('tab-nav-rail');
+            const railJogRow = document.getElementById('rail-jog-row');
+            const railCartesianGroup = document.getElementById('rail-cartesian-group');
+            const targetRailInfo = document.getElementById('target-rail-info');
+            const monitorRailSection = document.getElementById('monitor-rail-section');
+
+            if (btnStandalone) btnStandalone.classList.toggle('active', !isRailModeActive);
+            if (btnRail) btnRail.classList.toggle('active', isRailModeActive);
+            if (tabNavRail) tabNavRail.style.display = isRailModeActive ? 'flex' : 'none';
+            if (railJogRow) railJogRow.style.display = isRailModeActive ? 'block' : 'none';
+            if (railCartesianGroup) railCartesianGroup.style.display = isRailModeActive ? 'block' : 'none';
+            if (targetRailInfo) targetRailInfo.style.display = isRailModeActive ? 'flex' : 'none';
+            if (monitorRailSection) monitorRailSection.style.display = isRailModeActive ? 'block' : 'none';
+
+            if (railGroup) {
+                railGroup.visible = isRailModeActive;
+            }
+            if (workspaceZoneGroup) {
+                workspaceZoneGroup.visible = !isRailModeActive;
+            }
+            if (railWorkspaceZoneGroup) {
+                railWorkspaceZoneGroup.visible = isRailModeActive;
+            }
+
+            // Cập nhật vị trí đế robot và các chỉ báo
+            updateRailPosition(currentRailL, railSwitchState);
+
+            // Cập nhật lại vị trí điểm đích 3D và TCP theo cấu hình mới
+            updateTargetMarker();
+            renderRobot(
+                parseFloat(document.getElementById('j1').value) || 0,
+                parseFloat(document.getElementById('j2').value) || 0,
+                parseFloat(document.getElementById('j3').value) || 0,
+                parseFloat(document.getElementById('j4').value) || 0
+            );
+
+            if (isRailModeActive) {
+                showToast('🛤️ Đã bật cấu hình: Dobot Magician + Ray trượt tuyến tính 1000mm');
+            } else {
+                showToast('🤖 Đã chuyển về cấu hình: Chỉ Dobot độc lập trên bàn');
+                const activeTab = document.querySelector('.nav-tab.active');
+                if (activeTab && activeTab.id === 'tab-nav-rail') {
+                    switchTab('jog');
+                }
+            }
+        }
+
+        function updateRailPosition(l_mm, switch_state=0) {
+            currentRailL = Math.max(0.0, Math.min(1000.0, parseFloat(l_mm) || 0.0));
+            railSwitchState = (switch_state === 1) ? 1 : 0;
+
+            // Trong không gian 3D: Ray trượt dài 1120mm trải từ Z = -560 đến Z = +560.
+            // L = 0mm (gốc công tắc hành trình) -> Z = -500mm.
+            // L = 500mm (tâm ray) -> Z = 0mm.
+            // L = 1000mm (hết hành trình) -> Z = +500mm.
+            const carriageZ = (currentRailL - 500.0);
+
+            if (railCarriage) {
+                railCarriage.position.set(0, 0, carriageZ);
+            }
+
+            if (isRailModeActive) {
+                // Cao độ 44mm tính từ sàn: 26mm ray + 18mm bàn trượt
+                robotRoot.position.set(0, 44, carriageZ);
+            } else {
+                robotRoot.position.set(0, 0, 0);
+            }
+
+            // Đèn LED cữ hành trình trên mô hình 3D (Đỏ khi chạm, Xanh khi nhả)
+            if (railSwitchLed && railSwitchLed.material) {
+                const isTripped = (railSwitchState === 1 || currentRailL <= 0.5);
+                railSwitchLed.material.color.setHex(isTripped ? 0xff4757 : 0x2ed573);
+                railSwitchLed.material.emissive.setHex(isTripped ? 0xff0000 : 0x00cc44);
+            }
+
+            // Đồng bộ lên các thành phần UI
+            const elCurrMm = document.getElementById('rail-curr-pos-mm');
+            const elCurrCm = document.getElementById('rail-curr-pos-cm');
+            const elSlider = document.getElementById('rail-slider');
+            const elSliderVal = document.getElementById('rail-slider-val');
+            const elCartL = document.getElementById('cart-l');
+            const elCartLVal = document.getElementById('cart-l-val');
+            const elQuickL = document.getElementById('quick-rail-l-val');
+            const elTargetL = document.getElementById('target-rail-l-display');
+            const elMonPos = document.getElementById('mon-rail-pos');
+            const elMonSwitch = document.getElementById('mon-rail-switch');
+            const elSwitchBadge = document.getElementById('rail-switch-badge');
+
+            if (elCurrMm) elCurrMm.innerText = currentRailL.toFixed(1);
+            if (elCurrCm) elCurrCm.innerText = `(${(currentRailL / 10).toFixed(1)} cm)`;
+            if (elSlider && !isInteractingWithRailSlider) elSlider.value = Math.round(currentRailL);
+            if (elSliderVal) elSliderVal.innerText = `${Math.round(currentRailL)} mm`;
+            if (elCartL && !isInteractingWithRailSlider) elCartL.value = Math.round(currentRailL);
+            if (elCartLVal) elCartLVal.innerText = `${Math.round(currentRailL)} mm`;
+            if (elQuickL) elQuickL.innerText = `${currentRailL.toFixed(1)} mm`;
+            if (elTargetL) elTargetL.innerText = `${currentRailL.toFixed(1)} mm`;
+            if (elMonPos) elMonPos.innerText = `${currentRailL.toFixed(1)} mm`;
+
+            const isSwitchClosed = (railSwitchState === 1 || currentRailL <= 0.5);
+            if (elSwitchBadge) {
+                elSwitchBadge.style.color = isSwitchClosed ? '#ff4757' : '#2ed573';
+                elSwitchBadge.innerHTML = isSwitchClosed ?
+                    `<span style="width: 7px; height: 7px; border-radius: 50%; background: #ff4757; display: inline-block;"></span> Đang chạm cữ (1)` :
+                    `<span style="width: 7px; height: 7px; border-radius: 50%; background: #2ed573; display: inline-block;"></span> Nhả (0)`;
+            }
+            if (elMonSwitch) {
+                elMonSwitch.style.color = isSwitchClosed ? '#ff4757' : '#2ed573';
+                elMonSwitch.innerText = isSwitchClosed ? '🔴 Đang chạm cữ (1)' : '🟢 Nhả (0)';
+            }
+        }
+
+        // Dừng chuyển động ray lập tức (cả mô phỏng 3D lẫn gửi lệnh dừng xuống mạch phần cứng)
+        function stopRailMotion() {
+            if (railAnimationFrameId) {
+                cancelAnimationFrame(railAnimationFrameId);
+                railAnimationFrameId = null;
+            }
+            isRailAnimating = false;
+            sendAction('rail_stop');
+            updateRailPosition(currentRailL, railSwitchState);
+            showToast('🛑 Đã dừng khẩn cấp ray trượt!');
+        }
+
+        // Hoạt hình trượt 3D mượt mà
+        async function animateRailMove(targetL, speedMmS=40.0) {
+            targetL = Math.max(0.0, Math.min(1000.0, parseFloat(targetL) || 0.0));
+            const startL = currentRailL;
+            const dist = Math.abs(targetL - startL);
+            if (dist < 0.2) {
+                updateRailPosition(targetL, railSwitchState);
+                return;
+            }
+
+            if (railAnimationFrameId) {
+                cancelAnimationFrame(railAnimationFrameId);
+                railAnimationFrameId = null;
+            }
+
+            const durationMs = Math.max(200, Math.min(3000, (dist / speedMmS) * 1000));
+            const startTime = performance.now();
+            isRailAnimating = true;
+
+            return new Promise((resolve) => {
+                function step(now) {
+                    if (!isRailAnimating) {
+                        railAnimationFrameId = null;
+                        resolve();
+                        return;
+                    }
+                    const elapsed = now - startTime;
+                    const progress = Math.min(1.0, elapsed / durationMs);
+                    const eased = progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress;
+                    const newL = startL + (targetL - startL) * eased;
+                    const sw = (newL <= 0.5) ? 1 : 0;
+                    updateRailPosition(newL, sw);
+
+                    // Cập nhật lại vị trí điểm đích 3D và TCP bám theo đế
+                    updateTargetMarker();
+                    renderRobot(
+                        parseFloat(document.getElementById('j1').value) || 0,
+                        parseFloat(document.getElementById('j2').value) || 0,
+                        parseFloat(document.getElementById('j3').value) || 0,
+                        parseFloat(document.getElementById('j4').value) || 0
+                    );
+
+                    if (progress < 1.0) {
+                        railAnimationFrameId = requestAnimationFrame(step);
+                    } else {
+                        railAnimationFrameId = null;
+                        updateRailPosition(targetL, (targetL <= 0.5) ? 1 : 0);
+                        updateTargetMarker();
+                        renderRobot(
+                            parseFloat(document.getElementById('j1').value) || 0,
+                            parseFloat(document.getElementById('j2').value) || 0,
+                            parseFloat(document.getElementById('j3').value) || 0,
+                            parseFloat(document.getElementById('j4').value) || 0
+                        );
+                        isRailAnimating = false;
+                        resolve();
+                    }
+                }
+                railAnimationFrameId = requestAnimationFrame(step);
+            });
+        }
+
+        function moveToRailMm(targetMm) {
+            targetMm = Math.max(0, Math.min(1000, parseFloat(targetMm)));
+            if (ws && ws.readyState === WebSocket.OPEN && isRobotHardwareConnected && currentMode === 'live') {
+                sendAction('rail_move', { l: targetMm, speed: railSpeedMmS });
+                showToast(`🛤️ Lệnh: Ray trượt chạy tới ${targetMm} mm (Tốc độ ${railSpeedMmS} mm/s)`);
+            } else {
+                animateRailMove(targetMm, railSpeedMmS);
+                showToast(`🎮 Mô phỏng: Ray chạy tới ${targetMm} mm`);
+            }
+        }
+
+        function doRailJog(deltaMm) {
+            const nextL = Math.max(0, Math.min(1000, currentRailL + deltaMm));
+            if (ws && ws.readyState === WebSocket.OPEN && isRobotHardwareConnected && currentMode === 'live') {
+                sendAction('rail_jog', { delta: deltaMm, speed: railSpeedMmS });
+                showToast(`🛤️ Lệnh Jog Ray: ${deltaMm > 0 ? '+' : ''}${deltaMm} mm`);
+            } else {
+                animateRailMove(nextL, railSpeedMmS);
+                showToast(`🎮 Mô phỏng Jog Ray: ${deltaMm > 0 ? '+' : ''}${deltaMm} mm`);
+            }
+        }
+
+        function triggerRailHome() {
+            if (ws && ws.readyState === WebSocket.OPEN && isRobotHardwareConnected && currentMode === 'live') {
+                sendAction('rail_home');
+                showToast('🏠 Lệnh: Ray đang chạy Homing về gốc 0.0 mm...');
+            } else {
+                animateRailMove(0.0, 30.0);
+                showToast('🎉 Mô phỏng: Ray đã về gốc Home 0.0 mm');
+            }
+        }
+
+        function onRailSliderInput(val) {
+            isInteractingWithRailSlider = true;
+            const targetMm = parseFloat(val);
+            const elSliderVal = document.getElementById('rail-slider-val');
+            const elCartLVal = document.getElementById('cart-l-val');
+            if (elSliderVal) elSliderVal.innerText = `${Math.round(targetMm)} mm`;
+            if (elCartLVal) elCartLVal.innerText = `${Math.round(targetMm)} mm`;
+            updateRailPosition(targetMm, (targetMm <= 0.5) ? 1 : 0);
+            updateTargetMarker();
+            renderRobot(
+                parseFloat(document.getElementById('j1').value) || 0,
+                parseFloat(document.getElementById('j2').value) || 0,
+                parseFloat(document.getElementById('j3').value) || 0,
+                parseFloat(document.getElementById('j4').value) || 0
+            );
+        }
+
+        function onRailSliderChange(val) {
+            isInteractingWithRailSlider = false;
+            const targetMm = parseFloat(val);
+            moveToRailMm(targetMm);
+        }
+
+        function nudgeRailSlider(delta) {
+            const nextL = Math.max(0, Math.min(1000, currentRailL + delta));
+            moveToRailMm(nextL);
+        }
+
+        function setRailSpeed(spd) {
+            railSpeedMmS = parseFloat(spd);
+            document.querySelectorAll('[data-railspeed]').forEach(btn => {
+                btn.classList.toggle('active', parseFloat(btn.dataset.railspeed) === railSpeedMmS);
+            });
+            const lbl = document.getElementById('rail-speed-label');
+            if (lbl) {
+                lbl.innerText = `${railSpeedMmS} mm/s ${railSpeedMmS === 40 ? '(Khuyên dùng)' : ''}`;
+            }
+        }
+
         function toggleProjectionLines() {
             showProjections = !showProjections;
             renderRobot(parseFloat(document.getElementById('j1').value), parseFloat(document.getElementById('j2').value), parseFloat(document.getElementById('j3').value), parseFloat(document.getElementById('j4').value));
@@ -2253,40 +2964,74 @@
         }
 
         function onTargetGizmoChange() {
-            const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
-            const y = Math.round(-targetBeaconGroup.position.z * 10) / 10;
-            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE) * 10) / 10;
+            if (isRailModeActive) {
+                const zWorld = targetBeaconGroup.position.z;
+                const xWorld = targetBeaconGroup.position.x;
+                const yWorld = targetBeaconGroup.position.y;
+                const zTcp = Math.round((yWorld - 44 - L1_BASE) * 10) / 10;
 
-            document.getElementById('inp-target-x').value = x.toFixed(1);
-            document.getElementById('inp-target-y').value = y.toFixed(1);
-            document.getElementById('inp-target-z').value = zTcp.toFixed(1);
+                const lOptimal = Math.max(0.0, Math.min(1000.0, zWorld + 500.0));
+                const zCarriage = lOptimal - 500.0;
+                const xArm = Math.round(xWorld * 10) / 10;
+                const yArm = Math.round(-(zWorld - zCarriage) * 10) / 10;
 
-            updateTargetAncillaries(x, y, zTcp);
+                document.getElementById('inp-target-x').value = xArm.toFixed(1);
+                document.getElementById('inp-target-y').value = yArm.toFixed(1);
+                document.getElementById('inp-target-z').value = zTcp.toFixed(1);
+
+                const elTargetL = document.getElementById('target-rail-l-display');
+                if (elTargetL) elTargetL.innerText = `${lOptimal.toFixed(1)} mm (Hiện tại: ${currentRailL.toFixed(1)} mm)`;
+
+                updateTargetAncillaries(xArm, yArm, zTcp);
+            } else {
+                const baseOffset = new THREE.Vector3(0, 0, 0);
+                const x = Math.round((targetBeaconGroup.position.x - baseOffset.x) * 10) / 10;
+                const y = Math.round(-(targetBeaconGroup.position.z - baseOffset.z) * 10) / 10;
+                const zTcp = Math.round((targetBeaconGroup.position.y - baseOffset.y - L1_BASE) * 10) / 10;
+
+                document.getElementById('inp-target-x').value = x.toFixed(1);
+                document.getElementById('inp-target-y').value = y.toFixed(1);
+                document.getElementById('inp-target-z').value = zTcp.toFixed(1);
+
+                updateTargetAncillaries(x, y, zTcp);
+            }
         }
 
         function onTargetGizmoDragEnd() {
-            const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
-            const y = Math.round(-targetBeaconGroup.position.z * 10) / 10;
-            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE) * 10) / 10;
+            onTargetGizmoChange();
 
-            document.getElementById('inp-target-x').value = x.toFixed(1);
-            document.getElementById('inp-target-y').value = y.toFixed(1);
-            document.getElementById('inp-target-z').value = zTcp.toFixed(1);
+            let x = parseFloat(document.getElementById('inp-target-x').value) || 0;
+            let y = parseFloat(document.getElementById('inp-target-y').value) || 0;
+            let zTcp = parseFloat(document.getElementById('inp-target-z').value) || 0;
 
-            updateTargetAncillaries(x, y, zTcp);
+            if (isRailModeActive) {
+                const zWorld = targetBeaconGroup.position.z;
+                const lOptimal = Math.max(0.0, Math.min(1000.0, zWorld + 500.0));
+                const zCarriage = lOptimal - 500.0;
+                const xArm = targetBeaconGroup.position.x;
+                const yArm = -(zWorld - zCarriage);
+                const rLocal = Math.sqrt(xArm * xArm + yArm * yArm);
 
-            const rHoriz = Math.sqrt(x * x + y * y);
-            if (rHoriz < 140 || rHoriz > 330 || zTcp < -120 || zTcp > 150) {
-                showToast(`⚠️ Điểm đích (X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}) nằm ngoài vùng an toàn!`);
-                return;
+                const isValid = (rLocal >= 140.0 && rLocal <= 330.0 && zTcp >= -120.0 && zTcp <= 150.0);
+                if (!isValid) {
+                    showToast(`⚠️ Điểm đích nằm ngoài vùng an toàn mở rộng (Bán kính tay: ${rLocal.toFixed(0)}mm, Z: ${zTcp.toFixed(0)}mm)!`);
+                    return;
+                }
+            } else {
+                const rHoriz = Math.sqrt(x * x + y * y);
+                const isValid = (rHoriz >= 140.0 && rHoriz <= 330.0 && zTcp >= -120.0 && zTcp <= 150.0);
+                if (!isValid) {
+                    showToast(`⚠️ Điểm đích (X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}) nằm ngoài vùng an toàn!`);
+                    return;
+                }
             }
 
             const autoMove = document.getElementById('chk-auto-move-drag');
             if (autoMove && autoMove.checked) {
-                showToast(`🎯 Thả chuột ➔ Robot đang di chuyển tới X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                showToast(`🎯 Thả chuột ➔ Tự động phối hợp Ray + Dobot di chuyển tới đích!`);
                 executeGoToPoint('safe');
             } else {
-                showToast(`📍 Đã ghim điểm: X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}. Bấm [Nhấc An Toàn] để chạy!`);
+                showToast(`📍 Đã ghim điểm đích! Bấm [Nhấc An Toàn] hoặc [Bay Thẳng] để chạy.`);
                 const btnSafe = document.querySelector('.btn-safe-jump');
                 if (btnSafe) {
                     btnSafe.style.transform = 'scale(1.05)';
@@ -2296,34 +3041,71 @@
         }
 
         function updateTargetAncillaries(x, y, zTcp) {
-            const floorHeight = L1_BASE + zTcp;
+            let isValid = true;
+            let msg = '';
+            let targetWorldX, targetWorldY, targetWorldZ;
+
+            if (isRailModeActive) {
+                targetWorldX = targetBeaconGroup.position.x;
+                targetWorldY = targetBeaconGroup.position.y;
+                targetWorldZ = targetBeaconGroup.position.z;
+
+                const lOptimal = Math.max(0.0, Math.min(1000.0, targetWorldZ + 500.0));
+                const zCarriage = lOptimal - 500.0;
+                const xArm = targetWorldX;
+                const yArm = -(targetWorldZ - zCarriage);
+                const rLocal = Math.sqrt(xArm * xArm + yArm * yArm);
+
+                if (rLocal < 140.0) {
+                    isValid = false;
+                    msg = `⚠️ Quá gần thân robot/ray (${rLocal.toFixed(1)}mm < 140mm)!`;
+                } else if (rLocal > 330.0) {
+                    isValid = false;
+                    msg = `⚠️ Vượt quá tầm với của Robot + Ray (${rLocal.toFixed(1)}mm > 330mm)!`;
+                } else if (zTcp < -120.0) {
+                    isValid = false;
+                    msg = `⚠️ Cao độ Z quá thấp (${zTcp.toFixed(1)}mm < -120mm)!`;
+                } else if (zTcp > 150.0) {
+                    isValid = false;
+                    msg = `⚠️ Cao độ Z quá cao (${zTcp.toFixed(1)}mm > 150mm)!`;
+                } else {
+                    isValid = true;
+                    msg = `✅ Trong vùng an toàn mở rộng (Ray L: ${lOptimal.toFixed(0)} mm, Tay: ${rLocal.toFixed(1)} mm)`;
+                }
+            } else {
+                targetWorldX = targetBeaconGroup.position.x;
+                targetWorldY = targetBeaconGroup.position.y;
+                targetWorldZ = targetBeaconGroup.position.z;
+
+                const rHoriz = Math.sqrt(x * x + y * y);
+                if (rHoriz < 140.0) {
+                    isValid = false;
+                    msg = `⚠️ Quá gần thân robot (${rHoriz.toFixed(1)}mm < 140mm)!`;
+                } else if (rHoriz > 330.0) {
+                    isValid = false;
+                    msg = `⚠️ Vượt quá tầm với tối đa (${rHoriz.toFixed(1)}mm > 330mm)!`;
+                } else if (zTcp < -120.0) {
+                    isValid = false;
+                    msg = `⚠️ Cao độ Z quá thấp (${zTcp.toFixed(1)}mm < -120mm)!`;
+                } else if (zTcp > 150.0) {
+                    isValid = false;
+                    msg = `⚠️ Cao độ Z quá cao (${zTcp.toFixed(1)}mm > 150mm)!`;
+                } else {
+                    isValid = true;
+                    msg = `✅ Trong tầm với an toàn (Bán kính: ${rHoriz.toFixed(1)} mm, Z: ${zTcp.toFixed(1)} mm)`;
+                }
+            }
 
             // Vòng tâm ngắm ở mặt sàn
-            targetFloorReticle.position.set(x, 0.6, -y);
+            targetFloorReticle.position.set(targetWorldX, 0.6, targetWorldZ);
 
             // Đường gióng rơi thẳng đứng
-            const pts = [new THREE.Vector3(x, floorHeight, -y), new THREE.Vector3(x, 0.6, -y)];
+            const pts = [
+                new THREE.Vector3(targetWorldX, targetWorldY, targetWorldZ),
+                new THREE.Vector3(targetWorldX, 0.6, targetWorldZ)
+            ];
             targetDropLine.geometry.setFromPoints(pts);
             targetDropLine.computeLineDistances();
-
-            // Kiểm tra an toàn
-            const rHoriz = Math.sqrt(x * x + y * y);
-            let isValid = true;
-            let msg = `✅ Trong tầm với an toàn (Bán kính: ${rHoriz.toFixed(1)} mm, Z: ${zTcp.toFixed(1)} mm)`;
-
-            if (rHoriz < 140.0) {
-                isValid = false;
-                msg = `⚠️ Quá gần thân robot (${rHoriz.toFixed(1)}mm < 140mm)!`;
-            } else if (rHoriz > 330.0) {
-                isValid = false;
-                msg = `⚠️ Vượt quá tầm với tối đa (${rHoriz.toFixed(1)}mm > 330mm)!`;
-            } else if (zTcp < -120.0) {
-                isValid = false;
-                msg = `⚠️ Cao độ Z quá thấp (${zTcp.toFixed(1)}mm < -120mm)!`;
-            } else if (zTcp > 150.0) {
-                isValid = false;
-                msg = `⚠️ Cao độ Z quá cao (${zTcp.toFixed(1)}mm > 150mm)!`;
-            }
 
             const badge = document.getElementById('target-reachability-badge');
             if (badge) {
@@ -2359,7 +3141,12 @@
                 label.style.display = 'block';
                 label.style.borderColor = isValid ? '#22c55e' : '#ef4444';
                 label.style.color = isValid ? '#4ade80' : '#f87171';
-                label.innerText = `🎯 ĐÍCH: (${x.toFixed(0)}, ${y.toFixed(0)}, ${zTcp.toFixed(0)})`;
+                if (isRailModeActive) {
+                    const lOpt = Math.max(0.0, Math.min(1000.0, pos.z + 500.0));
+                    label.innerText = `🎯 ĐÍCH: (${x.toFixed(0)}, ${y.toFixed(0)}, ${zTcp.toFixed(0)}) | Ray L: ${lOpt.toFixed(0)}mm`;
+                } else {
+                    label.innerText = `🎯 ĐÍCH: (${x.toFixed(0)}, ${y.toFixed(0)}, ${zTcp.toFixed(0)})`;
+                }
             } else {
                 label.style.display = 'none';
             }
@@ -2370,10 +3157,22 @@
             const y = parseFloat(document.getElementById('inp-target-y').value) || 0;
             const zTcp = parseFloat(document.getElementById('inp-target-z').value) || 0;
 
-            const floorHeight = L1_BASE + zTcp;
-            targetBeaconGroup.position.set(x, floorHeight, -y);
+            if (isRailModeActive) {
+                const baseOffset = new THREE.Vector3(0, 44, currentRailL - 500.0);
+                const floorHeight = L1_BASE + zTcp + baseOffset.y;
+                targetBeaconGroup.position.set(x + baseOffset.x, floorHeight, -y + baseOffset.z);
 
-            updateTargetAncillaries(x, y, zTcp);
+                const zWorld = targetBeaconGroup.position.z;
+                const lOptimal = Math.max(0.0, Math.min(1000.0, zWorld + 500.0));
+                const elTargetL = document.getElementById('target-rail-l-display');
+                if (elTargetL) elTargetL.innerText = `${lOptimal.toFixed(1)} mm (Hiện tại: ${currentRailL.toFixed(1)} mm)`;
+
+                updateTargetAncillaries(x, y, zTcp);
+            } else {
+                const floorHeight = L1_BASE + zTcp;
+                targetBeaconGroup.position.set(x, floorHeight, -y);
+                updateTargetAncillaries(x, y, zTcp);
+            }
         }
 
         function copyCurrentPoseToTargetInputs() {
@@ -2395,28 +3194,77 @@
         }
 
         async function executeGoToPoint(mode) {
-            const x = parseFloat(document.getElementById('inp-target-x').value);
-            const y = parseFloat(document.getElementById('inp-target-y').value);
-            const zTcp = parseFloat(document.getElementById('inp-target-z').value);
-            const r = parseFloat(document.getElementById('inp-target-r').value);
+            const x = parseFloat(document.getElementById('inp-target-x').value) || 0;
+            const y = parseFloat(document.getElementById('inp-target-y').value) || 0;
+            const zTcp = parseFloat(document.getElementById('inp-target-z').value) || 0;
+            const r = parseFloat(document.getElementById('inp-target-r').value) || 0;
 
-            const rHoriz = Math.sqrt(x * x + y * y);
-            if (rHoriz < 140.0 || rHoriz > 330.0 || zTcp < -120.0 || zTcp > 150.0) {
-                alert(`⚠️ Tọa độ không an toàn!\nBán kính: ${rHoriz.toFixed(1)}mm (hợp lệ: 140 - 330mm)\nZ đầu hút: ${zTcp.toFixed(1)}mm (hợp lệ: -120 - 150mm)`);
-                return;
-            }
+            if (isRailModeActive) {
+                // Tọa độ mục tiêu trong không gian 3D
+                const zWorld = targetBeaconGroup.position.z;
+                const xWorld = targetBeaconGroup.position.x;
+                const lOptimal = Math.max(0.0, Math.min(1000.0, zWorld + 500.0));
+                const zCarriage = lOptimal - 500.0;
+                const xArm = xWorld;
+                const yArm = -(zWorld - zCarriage);
+                const rLocal = Math.sqrt(xArm * xArm + yArm * yArm);
 
-            const zFlange = zTcp + toolOffset;
-            if (isSimulationMode()) {
-                showToast(`🎮 [Mô phỏng 3D] ${mode === 'safe' ? 'Nhấc an toàn' : 'Bay thẳng'} -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
-                await animateRobotCartesian(x, y, zTcp, r, mode, mode === 'safe' ? 600 : 450);
-            } else {
-                if (mode === 'safe') {
-                    sendAction('safe_jump', { x: x, y: y, z: zFlange, r: r });
-                    showToast(`📦 Safe Jump: Nhấc an toàn -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                // 1. Kiểm tra an toàn mở rộng (nhờ có ray)
+                if (rLocal < 140.0 || rLocal > 330.0 || zTcp < -120.0 || zTcp > 150.0) {
+                    alert(`⚠️ Điểm đích nằm ngoài vùng an toàn mở rộng của Robot + Ray trượt!\n\n` +
+                          `• Bán kính vươn tay: ${rLocal.toFixed(1)} mm (cho phép: 140 - 330 mm)\n` +
+                          `• Cao độ Z đầu hút: ${zTcp.toFixed(1)} mm (cho phép: -120 - 150 mm)\n` +
+                          `• Vị trí Ray tối ưu: L = ${lOptimal.toFixed(1)} mm (hành trình: 0 - 1000 mm)\n\n` +
+                          `Không thể thực hiện di chuyển đến điểm quá tầm!`);
+                    return;
+                }
+
+                // 2. BƯỚC 1: DI CHUYỂN RAY ĐẾN VỊ TRÍ CỦA CỤC ĐÍCH
+                const deltaL = Math.abs(lOptimal - currentRailL);
+                if (deltaL > 0.5) {
+                    showToast(`🛤️ [Bước 1/2] Đang di chuyển ray trượt tới L = ${lOptimal.toFixed(0)} mm...`);
+                    if (ws && ws.readyState === WebSocket.OPEN && isRobotHardwareConnected && currentMode === 'live') {
+                        sendAction('rail_move', { l: lOptimal, speed: railSpeedMmS });
+                        const durationMs = (deltaL / railSpeedMmS) * 1000 + 400;
+                        await sleepMs(durationMs);
+                    } else {
+                        await animateRailMove(lOptimal, railSpeedMmS);
+                    }
+                }
+
+                // 3. BƯỚC 2: DI CHUYỂN DOBOT TỚI ĐÍCH
+                showToast(`🤖 [Bước 2/2] Dobot đang vươn tới đích (X=${xArm.toFixed(0)}, Y=${yArm.toFixed(0)}, Z=${zTcp.toFixed(0)})...`);
+                const zFlange = zTcp + toolOffset;
+                if (ws && ws.readyState === WebSocket.OPEN && isRobotHardwareConnected && currentMode === 'live') {
+                    if (mode === 'safe') {
+                        sendAction('safe_jump', { x: xArm, y: yArm, z: zFlange, r: r });
+                    } else {
+                        sendAction('move_xyz', { x: xArm, y: yArm, z: zFlange, r: r, mode: 1 });
+                    }
                 } else {
-                    sendAction('move_xyz', { x: x, y: y, z: zFlange, r: r, mode: 1 });
-                    showToast(`🚀 Direct PTP: Bay thẳng -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                    await animateRobotCartesian(xArm, yArm, zTcp, r, mode, mode === 'safe' ? 600 : 450);
+                }
+                showToast(`🎉 Hoàn tất di chuyển phối hợp Ray (L=${lOptimal.toFixed(0)}mm) + Dobot!`);
+            } else {
+                // Chế độ Standalone độc lập
+                const rHoriz = Math.sqrt(x * x + y * y);
+                if (rHoriz < 140.0 || rHoriz > 330.0 || zTcp < -120.0 || zTcp > 150.0) {
+                    alert(`⚠️ Tọa độ không an toàn!\nBán kính: ${rHoriz.toFixed(1)}mm (hợp lệ: 140 - 330mm)\nZ đầu hút: ${zTcp.toFixed(1)}mm (hợp lệ: -120 - 150mm)`);
+                    return;
+                }
+
+                const zFlange = zTcp + toolOffset;
+                if (isSimulationMode()) {
+                    showToast(`🎮 [Mô phỏng 3D] ${mode === 'safe' ? 'Nhấc an toàn' : 'Bay thẳng'} -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                    await animateRobotCartesian(x, y, zTcp, r, mode, mode === 'safe' ? 600 : 450);
+                } else {
+                    if (mode === 'safe') {
+                        sendAction('safe_jump', { x: x, y: y, z: zFlange, r: r });
+                        showToast(`📦 Safe Jump: Nhấc an toàn -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                    } else {
+                        sendAction('move_xyz', { x: x, y: y, z: zFlange, r: r, mode: 1 });
+                        showToast(`🚀 Direct PTP: Bay thẳng -> X=${x.toFixed(0)}, Y=${y.toFixed(0)}, Z=${zTcp.toFixed(0)}`);
+                    }
                 }
             }
         }
@@ -2440,6 +3288,7 @@
             const y = Math.round(lastKnownRobotPose.y * 10) / 10;
             const zTcp = Math.round(lastKnownRobotPose.zTcp * 10) / 10;
             const r = Math.round(lastKnownRobotPose.r * 10) / 10;
+            const l = Math.round(currentRailL * 10) / 10;
             const idx = teachWaypoints.length + 1;
 
             teachWaypoints.push({
@@ -2449,21 +3298,24 @@
                 y: y,
                 zTcp: zTcp,
                 r: r,
+                l: l,
                 moveType: 'safe',
                 suction: 'keep',
                 delay: 1.0
             });
 
             renderTeachList();
-            showToast(`📍 Đã lưu vị trí Robot: X=${x}, Y=${y}, Z=${zTcp}`);
+            showToast(`📍 Đã lưu Robot: X=${x}, Y=${y}, Z=${zTcp}${isRailModeActive ? `, L=${l}` : ''}`);
         }
 
         function addTargetGizmoPoseToTeach() {
             if (!targetBeaconGroup) return;
-            const x = Math.round(targetBeaconGroup.position.x * 10) / 10;
-            const y = Math.round(-targetBeaconGroup.position.z * 10) / 10;
-            const zTcp = Math.round((targetBeaconGroup.position.y - L1_BASE) * 10) / 10;
+            const baseOffset = isRailModeActive ? new THREE.Vector3(0, 44, currentRailL - 500) : new THREE.Vector3(0, 0, 0);
+            const x = Math.round((targetBeaconGroup.position.x - baseOffset.x) * 10) / 10;
+            const y = Math.round(-(targetBeaconGroup.position.z - baseOffset.z) * 10) / 10;
+            const zTcp = Math.round((targetBeaconGroup.position.y - baseOffset.y - L1_BASE) * 10) / 10;
             const r = parseFloat(document.getElementById('inp-target-r').value) || 0;
+            const l = Math.round(currentRailL * 10) / 10;
             const idx = teachWaypoints.length + 1;
 
             teachWaypoints.push({
@@ -2473,13 +3325,14 @@
                 y: y,
                 zTcp: zTcp,
                 r: Math.round(r * 10) / 10,
+                l: l,
                 moveType: 'safe',
                 suction: 'keep',
                 delay: 1.0
             });
 
             renderTeachList();
-            showToast(`🎯 Đã lưu Cục Đích: X=${x}, Y=${y}, Z=${zTcp}`);
+            showToast(`🎯 Đã lưu Cục Đích: X=${x}, Y=${y}, Z=${zTcp}${isRailModeActive ? `, L=${l}` : ''}`);
         }
 
         function renderTeachList() {
@@ -2863,20 +3716,32 @@
 
             raycaster.setFromCamera(mouseVec, camera);
 
-            // Cao độ mặt phẳng chọn điểm (Robot Z = targetZ, tính theo Three.js Y = L1_BASE + targetZ)
+            // Cao độ mặt phẳng chọn điểm (Robot Z = targetZ, tính theo Three.js Y = L1_BASE + targetZ + baseOffset.y)
             const targetZ = parseFloat(document.getElementById('inp-target-z').value) || 0;
-            const planeY = L1_BASE + targetZ;
+            const baseOffset = isRailModeActive ? new THREE.Vector3(0, 44, currentRailL - 500) : new THREE.Vector3(0, 0, 0);
+            const planeY = L1_BASE + targetZ + baseOffset.y;
             const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY);
             const hit = new THREE.Vector3();
             const result = raycaster.ray.intersectPlane(plane, hit);
 
             if (result) {
-                return {
-                    x: Math.round(hit.x * 10) / 10,
-                    y: Math.round(-hit.z * 10) / 10,
-                    z: targetZ,
-                    worldPos: hit
-                };
+                if (isRailModeActive) {
+                    const lOpt = Math.max(0.0, Math.min(1000.0, hit.z + 500.0));
+                    const zCarriage = lOpt - 500.0;
+                    return {
+                        x: Math.round(hit.x * 10) / 10,
+                        y: Math.round(-(hit.z - zCarriage) * 10) / 10,
+                        z: targetZ,
+                        worldPos: hit
+                    };
+                } else {
+                    return {
+                        x: Math.round((hit.x - baseOffset.x) * 10) / 10,
+                        y: Math.round(-(hit.z - baseOffset.z) * 10) / 10,
+                        z: targetZ,
+                        worldPos: hit
+                    };
+                }
             }
             return null;
         }
@@ -2891,7 +3756,7 @@
 
             const rHoriz = Math.sqrt(rawX * rawX + rawY * rawY);
             if (rHoriz < 140.0) {
-                showToast(`⚠️ Điểm (X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}) quá gần đế robot (< 140mm)!`);
+                showToast(`⚠️ Điểm (X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}) quá gần thân robot/ray (< 140mm)!`);
                 return;
             }
             if (rHoriz > 330.0) {
@@ -2901,10 +3766,10 @@
 
             const autoMove = document.getElementById('chk-auto-move-drag');
             if (autoMove && autoMove.checked) {
-                showToast(`🎯 Click chọn ➔ Robot đang di chuyển tới X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}, Z=${curZ.toFixed(0)}`);
+                showToast(`🎯 Click chọn ➔ Tự động phối hợp Ray + Dobot di chuyển tới X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}, Z=${curZ.toFixed(0)}`);
                 executeGoToPoint('safe');
             } else {
-                showToast(`📍 Đã ghim điểm đích tới X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}. Kéo mũi tên xanh lá để chỉnh Z!`);
+                showToast(`📍 Đã ghim điểm đích tới X=${rawX.toFixed(0)}, Y=${rawY.toFixed(0)}. Bấm [Nhấc An Toàn] để chạy!`);
             }
         }
 
@@ -3096,7 +3961,8 @@
                             j1: msg.data.j1,
                             j2: msg.data.j2,
                             j3: msg.data.j3,
-                            j4: msg.data.j4
+                            j4: msg.data.j4,
+                            l: msg.data.l !== undefined ? msg.data.l : currentRailL
                         };
                         badge.className = "status-badge live";
                         badge.style.background = "";
@@ -3106,8 +3972,32 @@
                         if (currentMode === "live") {
                             renderRobot(msg.data.j1, msg.data.j2, msg.data.j3, msg.data.j4, msg.data.x, msg.data.y, msg.data.z);
                         }
+                        if (msg.data.l !== undefined && !isInteractingWithRailSlider) {
+                            if (msg.data.rail_moving === false && isRailAnimating) {
+                                if (railAnimationFrameId) {
+                                    cancelAnimationFrame(railAnimationFrameId);
+                                    railAnimationFrameId = null;
+                                }
+                                isRailAnimating = false;
+                            }
+                            if (!isRailAnimating) {
+                                updateRailPosition(msg.data.l, msg.data.rail_switch || 0);
+                            }
+                        }
                     } else {
                         isRobotHardwareConnected = false;
+                        if (msg.data && msg.data.l !== undefined && !isInteractingWithRailSlider) {
+                            if (msg.data.rail_moving === false && isRailAnimating) {
+                                if (railAnimationFrameId) {
+                                    cancelAnimationFrame(railAnimationFrameId);
+                                    railAnimationFrameId = null;
+                                }
+                                isRailAnimating = false;
+                            }
+                            if (!isRailAnimating) {
+                                updateRailPosition(msg.data.l, msg.data.rail_switch || 0);
+                            }
+                        }
                         if (currentMode === 'manual') {
                             badge.className = "status-badge simulation";
                             statusText.innerText = "🎮 Đang chạy mô phỏng 3D độc lập";
@@ -3161,6 +4051,15 @@
             if (action === 'emergency_stop') {
                 if (typeof isPlaybackRunning !== 'undefined' && isPlaybackRunning) stopPlayback();
                 if (typeof isBlocklyRunning !== 'undefined' && isBlocklyRunning) stopBlocklyCode();
+                if (typeof stopRailMotion === 'function') stopRailMotion();
+            }
+            if (action === 'rail_stop') {
+                if (railAnimationFrameId) {
+                    cancelAnimationFrame(railAnimationFrameId);
+                    railAnimationFrameId = null;
+                }
+                isRailAnimating = false;
+                updateRailPosition(currentRailL, railSwitchState);
             }
             if (ws && ws.readyState === WebSocket.OPEN) {
                 let data = { action: action };
