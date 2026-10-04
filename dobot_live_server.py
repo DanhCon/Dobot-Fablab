@@ -636,17 +636,44 @@ class MainHandler(tornado.web.RequestHandler):
         with open(file_path, "r", encoding="utf-8") as f:
             self.write(f.read())
 
+    def head(self):
+        self.get()
+
+
+class CorsStaticFileHandler(tornado.web.StaticFileHandler):
+    def set_extra_headers(self, path):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "*")
+
 
 class StaticFileHandler(tornado.web.RequestHandler):
     def get(self, filename):
         file_path = os.path.join(os.path.dirname(__file__), filename)
-        if os.path.exists(file_path):
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            self.set_header("Access-Control-Allow-Origin", "*")
             if filename.endswith(".js"):
                 self.set_header("Content-Type", "application/javascript")
+            elif filename.endswith(".html"):
+                self.set_header("Content-Type", "text/html; charset=utf-8")
+            elif filename.endswith(".css"):
+                self.set_header("Content-Type", "text/css")
+            elif filename.endswith(".dae") or filename.endswith(".xml") or filename.endswith(".urdf"):
+                self.set_header("Content-Type", "application/xml")
+            elif filename.endswith(".json"):
+                self.set_header("Content-Type", "application/json")
             with open(file_path, "rb") as f:
                 self.write(f.read())
         else:
             self.set_status(404)
+
+
+class UrdfHandler(tornado.web.RequestHandler):
+    def get(self):
+        file_path = os.path.join(os.path.dirname(__file__), "dobot_description", "view_urdf.html")
+        if not os.path.exists(file_path):
+            file_path = os.path.join(os.path.dirname(__file__), "view_urdf.html")
+        with open(file_path, "r", encoding="utf-8") as f:
+            self.write(f.read())
 
 
 class WebSocketHandler(tornado.websocket.WebSocketHandler):
@@ -899,16 +926,21 @@ def main():
     port = find_available_port(preferred)
     app = tornado.web.Application([
         (r"/", MainHandler),
+        (r"/urdf", UrdfHandler),
         (r"/ws", WebSocketHandler),
         (r"/api/cmd", ApiCmdHandler),
+        (r"/dobot_description/(.*)", CorsStaticFileHandler, {"path": os.path.join(os.path.dirname(__file__), "dobot_description")}),
         (r"/(.*\.js)", StaticFileHandler),
+        (r"/(.*\.html)", StaticFileHandler),
+        (r"/(.*\.urdf)", StaticFileHandler),
     ])
     
     app.listen(port, address="0.0.0.0")
-    print("=" * 60)
-    print(f"  DOBOT MAGICIAN 3D LIVE DIGITAL TWIN SERVER")
-    print(f"  Giao diện Web: http://localhost:{port}")
-    print("=" * 60)
+    print("=" * 65)
+    print(f"  DOBOT MAGICIAN 3D LIVE DIGITAL TWIN & CAD URDF SERVER")
+    print(f"  🎮 Bảng Điều Khiển Live Twin:  http://localhost:{port}")
+    print(f"  🎨 Mô Hình 3D CAD Mesh Gốc:     http://localhost:{port}/urdf")
+    print("=" * 65)
     print("[*] Đang tự động dò tìm Dobot Magician qua cáp USB...")
     robot.connect()
 

@@ -597,6 +597,159 @@ Dưới đây là phân tích chi tiết các vấn đề kỹ thuật phát sin
        * **Bước 1 (Di chuyển ray):** Ray trượt tự động chạy đến vị trí $L_{optimal}$ để đón cục đích.
        * **Bước 2 (Di chuyển Dobot):** Cánh tay Dobot vươn chính xác đến tọa độ đích $(X_{arm\_local}, Y_{arm\_local}, Z_{tcp})$.
 
+---
 
+## 18. Gói URDF Đa Năng Tích Hợp Đầy Đủ (Dobot Magician CAD Meshes + 1.0m Sliding Rail Kit + Switch Mode) (2026-10-03)
 
+### 18.1. Đặt vấn đề & Nhu cầu thực tế
+* Ban đầu hệ thống chỉ có file `dobot_with_rail.urdf.xacro` sử dụng các khối hình học cơ bản (Geometric Primitives: Box, Cylinder). Mặc dù nhẹ nhưng hình thức hiển thị khá thô, thiếu các góc bo mềm mại, gân tản nhiệt và chi tiết cơ khí thật của Dobot Magician.
+* Cần một giải pháp URDF toàn diện:
+  1. Sử dụng bộ **3D CAD Meshes chuẩn (`.dae` / Collada)** trích xuất từ bản vẽ SolidWorks chính hãng của Dobot.
+  2. Tích hợp đầy đủ cả **Dobot Magician (4-DOF)** và **Ray trượt tuyến tính 1.0m (Sliding Rail Kit - 1-DOF)** thành hệ thống **5-DOF**.
+  3. Hỗ trợ **chuyển đổi linh hoạt (Switch Mode)** giữa chế độ chạy độc lập (Standalone Dobot) và Dobot gắn trên ray trượt (With Rail).
+  4. Hỗ trợ đa dạng đầu công tác: **Đầu hút chân không (Suction Cup)**, **Kẹp khí nén (Gripper)** và **Bút vẽ (Pen)**.
+  5. Sẵn sàng cho cả môi trường **ROS 2 Humble (RViz2 / MoveIt)** và **Web 3D Interactive Viewer**.
+
+### 18.2. Cấu trúc thư mục gói `dobot_description`
+```text
+/home/danh/FABLAB/DOBOT/dobot_description/
+├── package.xml                           # ROS 2 package manifest
+├── launch/
+│   └── display.launch.py                 # ROS 2 launch file hiển thị trên RViz2
+├── rviz/
+│   └── dobot_view.rviz                   # File cấu hình góc nhìn và ánh sáng RViz2
+├── meshes/
+│   ├── dae/                              # File 3D Collada đầy đủ vật liệu, màu sắc
+│   │   ├── magicianBase.dae              # Thân đế robot
+│   │   ├── magicianLink1.dae             # Khớp 1 (xoay thân)
+│   │   ├── magicianLink2.dae             # Khớp 2 (khớp vai / rear arm)
+│   │   ├── magicianLink3.dae             # Khớp 3 (khớp khuỷu / forearm)
+│   │   ├── magicianLink4_default.dae     # Khớp cổ tay
+│   │   ├── magicianSuctionCup.dae        # Giác hút chân không
+│   │   ├── magicianGripper.dae           # Kẹp gắp khí nén
+│   │   ├── magician_pen.dae              # Đầu bút vẽ
+│   │   └── sliding_rail.dae              # Ray trượt
+│   └── collision/                        # File mesh tối ưu cho kiểm tra va chạm
+├── urdf/
+│   ├── dobot_magician_rail.urdf.xacro    # Master Xacro hỗ trợ tham số hóa và switch mode
+│   ├── dobot_magician_with_rail.urdf     # URDF biên dịch sẵn cho Dobot + Ray trượt 1.0m
+│   └── dobot_magician_standalone.urdf    # URDF biên dịch sẵn cho Dobot độc lập
+└── view_urdf.html                        # Trình hiển thị 3D tương tác trực quan trên Web
+```
+
+### 18.3. Đặc tả Kỹ thuật Kinematic & Dynamic Limits
+* **Khớp Ray trượt $L$ (`rail_joint`):**
+  * Loại khớp: `prismatic`
+  * Hướng dịch chuyển: Trục $Y$ (hoặc $Z$ trong Three.js), hành trình: $0.0 \to 1.000\text{ m}$ ($1000\text{ mm}$).
+  * Giới hạn lực: $150\text{ N}$, vận tốc: $0.08\text{ m/s}$, damping: $15.0$, friction: $5.0$.
+* **Khớp 1 (`dobot_joint_1`):** `revolute`, xoay quanh trục $Z$, góc $-90^\circ \to +90^\circ$ ($-1.5708 \to +1.5708\text{ rad}$).
+* **Khớp 2 (`dobot_joint_2`):** `revolute`, gập vai quanh trục $Y$, góc $0^\circ \to 85^\circ$ ($0 \to 1.4835\text{ rad}$).
+* **Khớp 3 (`dobot_joint_3`):** `revolute`, gập khuỷu quanh trục $Y$, góc $-10^\circ \to 90^\circ$ ($-0.1745 \to 1.5708\text{ rad}$).
+* **Khớp 4 (`dobot_joint_4`):** `revolute`, liên kết cơ cấu bình hành giữ đầu công tác luôn song song với mặt phẳng bàn:
+  $$\text{mimic joint} = \text{dobot\_joint\_2},\quad \text{multiplier} = -1.0,\quad \text{offset} = 0.0$$
+* **Khớp 5 / R (`dobot_joint_5_r`):** `revolute`, xoay đầu công tác quanh trục $Z$, góc $-90^\circ \to +90^\circ$.
+
+### 18.4. Hướng dẫn Sử dụng & Trải nghiệm
+1. **Xem trực tiếp trên Web 3D (`view_urdf.html`):**
+   * Mở file `view_urdf.html` trực tiếp trên trình duyệt hoặc qua máy chủ web (`dobot_live_server.py` port 8080).
+   * Hỗ trợ thanh trượt điều khiển cự ly ray $0 \to 1000\text{ mm}$, các góc khớp $J_1 \to J_4$, nút chuyển chế độ Ray $\longleftrightarrow$ Đơn lẻ, nút đổi công cụ Suction Cup / Gripper / Pen, và hiển thị hệ trục tọa độ TF ($X$ đỏ, $Y$ xanh lá, $Z$ xanh dương).
+2. **Khởi chạy trên ROS 2 Humble (RViz2):**
+   ```bash
+   # Nạp môi trường ROS 2
+   source /opt/ros/humble/setup.bash
+   
+   # Khởi chạy hiển thị mô hình kèm GUI điều khiển khớp
+   ros2 launch dobot_description display.launch.py has_rail:=true tool:=suction_cup
+   ```
+
+---
+
+## 19. Nâng Cấp Mô Hình 3D Dobot Magician Chân Thực Trong Giao Diện Web Visualizer (Digital Twin)
+
+### 19.1. Bối cảnh & Mục tiêu
+* **Yêu cầu người dùng:** Người dùng phản ánh mô hình 3D trong giao diện Web (`dobot_visualizer.html`) quá thô cứng dạng hình hộp khối ghép (primitive boxes/cones) và mong muốn nâng cấp cho chân thực, đẹp mắt như robot thật mà không phụ thuộc vào ROS 2.
+* **Mục tiêu:**
+  1. Thay thế toàn bộ các hình học thô sơ bằng mô hình 3D thủ tục có độ cong vát mượt mà (fillets, chamfers, aerofoil cowls, concentric lathe grooves).
+  2. Nâng cấp hệ thống vật liệu sang **PBR Specular/Roughness & Clearcoat (`MeshPhysicalMaterial`)** chuẩn màu Dobot.
+  3. Thêm các chi tiết đồ họa chính hãng độ nét cao qua Canvas Textures (Logo DOBOT Magician, tem thông số motor J4, đĩa nắp tiện CNC, bảng cổng cắm I/O, bóng đổ tiếp xúc mềm).
+  4. Nâng cấp không gian hiển thị sang **Digital Twin Studio Lab** với nền xám than `#0f141c`, sàn phay xước `#161a22`, lưới công nghệ và chiếu sáng 4 nguồn studio (Key, Fill, Rim, Ambient).
+  5. Đảm bảo bảo toàn 100% cấu trúc phân cấp cây động học để toàn bộ các hàm Forward/Inverse Kinematics, Jogging, Sliders, Homing, Ray trượt, Target Gizmo và WebSocket hoạt động hoàn hảo.
+
+### 19.2. Chi tiết Cải tiến Hình học & Vật liệu
+1. **Chân đế (Base Assembly):**
+   * Vỏ đế kích thước $158 \times 158 \times 44\text{ mm}$ bo tròn 4 góc $R=14\text{ mm}$ bằng `ExtrudeGeometry` kết hợp `bevelSegments: 5`, phủ sơn trắng ngọc ABS với clearcoat bóng mờ.
+   * Mâm xoay âm sàn tích hợp **vòng hào quang LED Cyan phát sáng** (`TorusGeometry`).
+   * Huy hiệu logo DOBOT Magician chính hãng sắc nét ở mặt trước ($Z = 81.1\text{ mm}$).
+   * Mặt nạ cổng kết nối I/O mặt sau với cổng USB, giắc nguồn 12V 7A, cổng Stepper.
+   * 4 chân cao su giảm chấn và bóng tiếp xúc mềm Ambient Occlusion dưới sàn.
+2. **Tháp xoay trục J1:**
+   * Cột tháp vuốt thon khí động học với gân nẹp thể thao mặt trước và khung sườn cơ khí đen bên trong.
+   * Cặp motor vai hai bên gắn **vòng xuyến nhôm anode xanh Dobot Blue (`matDobotBlue`)**, mặt nắp đĩa kim loại tiện CNC vân tròn đồng tâm và bạc đạn trung tâm inox.
+3. **Cánh tay sau J2 ($L_2 = 135\text{ mm}$):**
+   * Vỏ ốp khí động học màu trắng ngọc ABS bo tròn các góc và rãnh trang trí thể thao hai bên.
+   * Cặp thanh đòn chịu lực CNC đen anode với các vòng gối xoay xanh Dobot Blue.
+   * Thanh ti trượt song mã mạ crom sáng bóng ($\phi 6.5\text{ mm}$) với **hai đầu khớp mắt trâu (Spherical Heim Joints)** bằng đồng và inox.
+4. **Cẳng tay trước J3 ($L_3 = 147\text{ mm}$):**
+   * Cặp đĩa xoay khớp khuỷu CNC viền xanh Dobot Blue.
+   * Thân cẳng tay vuốt thon từ khuỷu ($38\text{ mm}$) ra cổ tay ($24\text{ mm}$) bằng `ExtrudeGeometry` bo vát.
+   * Nắp ốp lưng trắng ngọc bo tròn tinh xảo.
+   * **Nút bấm tròn "KEY" / Teach xanh Dobot Blue** viền bạc đặc trưng tại vị trí $X = 54\text{ mm}$.
+   * Thanh ti song mã phụ bên dưới và **dây khí nén Polyurethane màu xanh ngọc trong suốt** uốn lượn mềm mại theo cẳng tay.
+5. **Cụm công tác đầu cuối J4 & Giác hút:**
+   * Động cơ J4 bo vát góc với **nhãn tem thông số kỹ thuật DOBOT Magician** (model, số serial, tem CE).
+   * Vòng tháo lắp nhanh khía rãnh nhôm CNC, đầu nối khí nén góc vuông $90^\circ$ bằng đồng thau kèm vòng gài xanh.
+   * Ty trượt inox lò xo và tán hãm lục giác.
+   * **Giác hút silicon 2 tầng gập (Double-Bellows Suction Cup)** màu đen than mờ với miệng hút loe đàn hồi mềm mại chuẩn công nghiệp, chạm đúng vị trí $Y = -59.5\text{ mm}$ (trùng khớp hoàn hảo với `toolOffset = 59.5`).
+   * Cụm tay kẹp song song khí nén với nắp xilanh, ty dẫn hướng mạ crom và má kẹp cao su đệm ma sát cao.
+6. **Môi trường & Chiếu sáng:**
+   * Nền tối Digital Twin Studio: `#0f141c` kết hợp sương mù fog làm mượt đường chân trời.
+   * Sàn lab kỹ thuật số `#161a22` kèm lưới tọa độ precision grid `#3b82f6` và `#222a38`.
+   * Ánh sáng 4 điểm: Key Light $1.3\times$ (đổ bóng mềm PCF), Fill Light $0.45\times$ (xanh lam bù sáng góc khuất), Rim Light $0.55\times$ (xanh lơ tạo viền bóng bẩy trên thân vỏ cong), Hemisphere Light $0.75\times$.
+
+### 19.3. Kiểm thử & Xác nhận
+* Cú pháp JavaScript của cả [`dobot_visualizer.html`](file:///home/danh/FABLAB/DOBOT/dobot_visualizer.html) và [`dist_netlify/index.html`](file:///home/danh/FABLAB/DOBOT/dist_netlify/index.html) được kiểm tra tự động bằng Node.js syntax parser và vượt qua 100% không có bất kỳ lỗi cú pháp nào.
+* Trình phục vụ `dobot_live_server.py` đã sẵn sàng để phục vụ file trực tiếp tại `http://localhost:8080/`.
+
+---
+
+## 20. Chuẩn Hóa Hình Học & Đồng Bộ Tọa Độ Vùng Làm Việc Ray Trượt 1000mm (Sliding Rail Workspace Overhaul)
+
+### 20.1. Vấn đề Phát Hiện & Nguyên Nhân Gốc
+* **Phản ánh:** Người dùng nhận thấy vùng làm việc khi kích hoạt chế độ Ray trượt (`isRailModeActive = true`) hiển thị không chính xác, các đường biên bị chéo cắt ngang, ranh giới biến dạng và mất trực quan khi di chuyển con trượt.
+* **Các sai số hình học & logic cốt lõi đã xác minh:**
+  1. **Lỗi góc quét End-Caps bán nguyệt:**
+     * Code cũ sử dụng `RingGeometry(140, 320, 32, 1, -Math.PI / 2, Math.PI)` ($180^\circ$ bán nguyệt) ở cả 2 đầu $Z = \pm 500\text{ mm}$.
+     * Tại $Z = +500\text{ mm}$, cung bán nguyệt quét ngược vào hành lang ray $320\text{ mm}$ (trải từ $Z = 180\text{ mm}$ đến $Z = 820\text{ mm}$) và ăn sâu vào tận $X = 0$, tạo nêm giao nhau lộn xộn với hình chữ nhật ray $X \in [140, 320]$.
+     * Thực tế hình học: Tại hai mút hành trình $Z_c = \pm 500\text{ mm}$, cánh tay robot chỉ vươn mở rộng ra ngoài mút ray dọc trục $Z$ theo **cung phần tư $90^\circ$ (Quarter-Ring: `thetaLength = Math.PI / 2`)**.
+  2. **Lỗi thứ tự đỉnh đường viền (Criss-crossing contour lines):**
+     * Mảng điểm `outerLinePts` và `innerLinePts` có thứ tự vẽ bị đảo chiều ở các cung và điểm nối, khiến Three.js vẽ đường kẻ chéo cắt xuyên qua tâm hành lang ray từ $(320, 500)$ tới $(0, 820)$ thay vì ôm sát biên mượt mà.
+  3. **Vùng vươn tức thời của tay robot bị ẩn khi bật ray:**
+     * Trước đây, khi bật Ray trượt, `workspaceZoneGroup.visible` bị gán `false`, khiến người dùng không biết tại vị trí con trượt hiện tại tay robot đang vươn được tới đâu mà chỉ thấy một dải nền phẳng bất động.
+  4. **Lệch tọa độ Điểm đích 3D (Target Beacon Snapping Bug):**
+     * Khi click chọn điểm trên mặt bàn ở chế độ Ray, hàm `get3DPointFromMouse` tính tọa độ $Y_{\text{arm}}$ theo vị trí con trượt tối ưu $L_{\text{optimal}}$, nhưng hàm `updateTargetMarker` lại gán vị trí cục đích theo $L_{\text{currentRailL}}$, khiến cục đích bị nhảy giật ngược về vị trí ray cũ thay vì bám đúng điểm chuột click.
+     * Kiểm tra hợp lệ (Hover / Picking) cho phép điểm ở phía sau ray ($X < 0$), trong khi trên thực tế ray và xích dẫn cáp cản trở hoàn toàn việc với ra sau lưng.
+
+### 20.2. Giải Pháp Triệt Để Đã Triển Khai
+1. **Dựng lại Hình học Bao vùng Ray Trượt Toàn Dải 1000mm (`railWorkspaceZoneGroup`):**
+   * **Hành lang ray:** Hình chữ nhật `PlaneGeometry(180, 1000)` trải từ $X \in [140, 320]$, $Z \in [-500, +500]$.
+   * **Mút đầu dương ($Z = +500\text{ mm}$):** Cung phần tư `RingGeometry(140, 320, 32, 1, -Math.PI / 2, Math.PI / 2)` tiếp nối trơn tru tại $Z=500$, trải từ $(320, 500)$ đến đỉnh mút $(0, 820)$.
+   * **Mút đầu âm ($Z = -500\text{ mm}$):** Cung phần tư `RingGeometry(140, 320, 32, 1, 0, Math.PI / 2)` tiếp nối trơn tru tại $Z=-500$, trải từ $(320, -500)$ đến đỉnh mút $(0, -820)$.
+2. **Đường Biên Đơn Liền Mạch (Continuous Outer & Inner Contours):**
+   * Đường viền ngoài $R = 320\text{ mm}$ (Cyan `#38bdf8` sáng) tạo thành một đường cong khép kín liên tục không có góc gãy hay đường chéo đâm ngang.
+   * Đường viền cảnh báo cận trong $R = 140\text{ mm}$ (Đỏ cam `#ff6b6b`).
+   * Các tia khép góc tại 2 đầu đỉnh ray từ $R = 140 \to 320\text{ mm}$ tại $X = 0$.
+3. **Thước Đo Vạch Chia Hành Trình & Nhãn Trực Quan Dọc Ray:**
+   * Thêm 5 vạch nét đứt ngang hành lang và nhãn 3D sắc nét tại:
+     * $L = 0\text{ mm}$ (Gốc Home / Cảm biến hành trình)
+     * $L = 250\text{ mm}$
+     * $L = 500\text{ mm}$ (Tâm hành trình ray)
+     * $L = 750\text{ mm}$
+     * $L = 1000\text{ mm}$ (Hết hành trình ray)
+4. **Hiển Thị Song Song Vùng Vươn Tức Thời (`workspaceZoneGroup`):**
+   * Trong chế độ Ray trượt, vùng vươn hình bán nguyệt xanh lá của Dobot Magician **luôn hiển thị và trượt mượt mà theo vị trí con trượt** (`workspaceZoneGroup.position.set(0, 0.05, carriageZ)`).
+   * Người dùng nhìn thấy rõ đồng thời: (1) Toàn bộ hành lang tiềm năng 1000mm của ray và (2) Vùng với tới hiện tại của cánh tay robot tại đúng vị trí con trượt.
+5. **Đồng Bộ Hoàn Hảo Tọa Độ Mục Tiêu & Click-to-Move:**
+   * Bổ sung biến trạng thái `targetRailL`. Khi click chọn điểm hoặc kéo Gizmo 3D ở bất kỳ đâu dọc ray 1000mm, vị trí ray mục tiêu và tọa độ tay robot $(X_{\text{arm}}, Y_{\text{arm}})$ được giải động học đồng thời và giữ nguyên vị trí cục đích chính xác 100%.
+   * Hàm kiểm tra `isPointInRailWorkspace(xWorld, zWorld, zTcp)` ngăn chặn click ra sau thân ray ($X < 0$) hoặc quá gần thân/ray ($X < 140\text{ mm}$).
+   * Đồng bộ toàn bộ logic sang [`dist_netlify/index.html`](file:///home/danh/FABLAB/DOBOT/dist_netlify/index.html).
 
