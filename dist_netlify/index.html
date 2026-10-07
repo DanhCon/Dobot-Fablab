@@ -1531,6 +1531,8 @@
         let targetRailL = 0.0;
         let railSwitchState = 0;
         let railSpeedMmS = 40.0;
+        let isRailHardwareMoving = false;
+        let isRailHardwareHomed = false;
         let isInteractingWithRailSlider = false;
         let isRailAnimating = false;
         let railAnimationFrameId = null;
@@ -3804,22 +3806,27 @@
 
         function doRailJog(deltaMm) {
             const nextL = Math.max(0, Math.min(1000, currentRailL + deltaMm));
+            const safeDelta = nextL - currentRailL;
+            if (Math.abs(safeDelta) < 0.1) {
+                showToast(`⚠️ Ray đã ở giới hạn (${currentRailL.toFixed(1)} mm)!`);
+                return;
+            }
             if (ws && ws.readyState === WebSocket.OPEN && isRobotHardwareConnected && currentMode === 'live') {
-                sendAction('rail_jog', { delta: deltaMm, speed: railSpeedMmS });
-                showToast(`🛤️ Lệnh Jog Ray: ${deltaMm > 0 ? '+' : ''}${deltaMm} mm`);
+                sendAction('rail_jog', { delta: safeDelta, speed: railSpeedMmS });
+                showToast(`🛤️ Lệnh Jog Ray: ${safeDelta > 0 ? '+' : ''}${safeDelta.toFixed(1)} mm`);
             } else {
                 animateRailMove(nextL, railSpeedMmS);
-                showToast(`🎮 Mô phỏng Jog Ray: ${deltaMm > 0 ? '+' : ''}${deltaMm} mm`);
+                showToast(`🎮 Mô phỏng Jog Ray: ${safeDelta > 0 ? '+' : ''}${safeDelta.toFixed(1)} mm`);
             }
         }
 
         function triggerRailHome() {
             if (ws && ws.readyState === WebSocket.OPEN && isRobotHardwareConnected && currentMode === 'live') {
                 sendAction('rail_home');
-                showToast('🏠 Lệnh: Ray đang chạy Homing về gốc 0.0 mm...');
+                showToast('🏠 Lệnh: Ray đang chạy Homing và tự động thoát cữ an toàn...');
             } else {
-                animateRailMove(0.0, 30.0);
-                showToast('🎉 Mô phỏng: Ray đã về gốc Home 0.0 mm');
+                animateRailMove(5.0, 30.0);
+                showToast('🎉 Mô phỏng: Ray đã về gốc và thoát cữ ra L = 5.0 mm');
             }
         }
 
@@ -4237,8 +4244,20 @@
                     showToast(`🛤️ [Bước 1/2] Đang di chuyển ray trượt tới L = ${lOptimal.toFixed(0)} mm...`);
                     if (ws && ws.readyState === WebSocket.OPEN && isRobotHardwareConnected && currentMode === 'live') {
                         sendAction('rail_move', { l: lOptimal, speed: railSpeedMmS });
-                        const durationMs = (deltaL / railSpeedMmS) * 1000 + 400;
-                        await sleepMs(durationMs);
+                        const estDurationMs = (deltaL / railSpeedMmS) * 1000;
+                        const maxWaitMs = estDurationMs + 4000;
+                        const tStart = Date.now();
+                        await sleepMs(200); // Chờ server nhận lệnh và bật cờ moving
+                        while (Date.now() - tStart < maxWaitMs) {
+                            if (!isRailHardwareMoving && Math.abs(currentRailL - lOptimal) <= 1.5) {
+                                break; // Ray đã tới đích và dừng hẳn
+                            }
+                            await sleepMs(50);
+                        }
+                        if (Math.abs(currentRailL - lOptimal) > 3.0) {
+                            showToast(`⚠️ Ray chưa tới đích yêu cầu (${currentRailL.toFixed(1)} != ${lOptimal.toFixed(1)} mm)! Đã hủy bước 2.`);
+                            return;
+                        }
                     } else {
                         await animateRailMove(lOptimal, railSpeedMmS);
                     }
@@ -5045,6 +5064,10 @@
                         statusText.innerText = `● Đang đồng bộ thật (${msg.port})`;
                         if (currentMode === "live") {
                             renderRobot(msg.data.j1, msg.data.j2, msg.data.j3, msg.data.j4, msg.data.x, msg.data.y, msg.data.z);
+                        }
+                        if (msg.data) {
+                            if (msg.data.rail_moving !== undefined) isRailHardwareMoving = !!msg.data.rail_moving;
+                            if (msg.data.rail_homed !== undefined) isRailHardwareHomed = !!msg.data.rail_homed;
                         }
                         if (msg.data.l !== undefined && !isInteractingWithRailSlider) {
                             if (msg.data.rail_moving === false && isRailAnimating) {

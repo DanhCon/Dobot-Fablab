@@ -136,6 +136,14 @@ class DobotRail:
         if abs(dist_mm) < 0.1:
             return True
 
+        if self.current_pos is not None:
+            target_pos = max(0.0, min(RAIL_MAX_MM, self.current_pos + dist_mm))
+            clamped_dist = target_pos - self.current_pos
+            if abs(clamped_dist) < 0.1:
+                print(f"[-] Ray đã ở giới hạn biên ({self.current_pos:.1f} mm), không thể di chuyển thêm!")
+                return True
+            dist_mm = clamped_dist
+
         pulses = int(abs(dist_mm) * PULSES_PER_MM)
         safe_speed = max(5.0, min(80.0, speed_mm_s))
         speed_pulses = int(safe_speed * PULSES_PER_MM)
@@ -167,7 +175,9 @@ class DobotRail:
         else:
             time.sleep(t_duration + 0.15)
 
-        if not interrupted and self.current_pos is not None:
+        if interrupted:
+            self._save_state(0.0)
+        elif self.current_pos is not None:
             new_pos = max(0.0, min(RAIL_MAX_MM, self.current_pos + dist_mm))
             self._save_state(new_pos)
 
@@ -218,9 +228,16 @@ class DobotRail:
             self.jog_mm(1.0, speed_mm_s=8.0)
             time.sleep(0.05)
 
-        self._save_state(0.0)
+        time.sleep(0.2)
+        # 4. Thoát cữ an toàn (Retreat): Nhích thêm 5.0mm để giải phóng hoàn toàn công tắc
+        print("[*] Thoát cữ an toàn (+5.0mm) để giải phóng hoàn toàn công tắc hành trình...")
+        retreat_mm = 5.0
+        self.jog_mm(retreat_mm, speed_mm_s=15.0)
+        time.sleep(0.2)
+
+        self._save_state(retreat_mm)
         print("=" * 70)
-        print("🎉 [HOMING HOÀN TẤT] >>> Vị trí hiện tại: 0.0 mm (0.0 cm)!")
+        print(f"🎉 [HOMING HOÀN TẤT] >>> Vị trí hiện tại: {retreat_mm:.1f} mm ({retreat_mm/10:.1f} cm) (Đã thoát cữ an toàn)!")
         print("=" * 70)
         return True
 

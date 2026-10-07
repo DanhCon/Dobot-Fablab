@@ -73,13 +73,14 @@ class DobotController:
 
         # Trạng thái ray trượt
         self.rail_pos = self._load_rail_state()
-        self.rail_homed = (self.rail_pos is not None)
+        self.rail_homed = False # Luôn yêu cầu Homing trong phiên mới để đảm bảo độ chính xác cơ điện tử
         if self.rail_pos is None:
             self.rail_pos = 0.0
         self.rail_switch_state = 0
         self.rail_lock = threading.Lock()
         self.rail_is_moving = False
         self.stop_requested = False
+        self.last_reconnect_time = 0.0
 
     def _load_rail_state(self):
         if os.path.exists(STATE_FILE):
@@ -113,6 +114,10 @@ class DobotController:
         with self.lock:
             if self.connected and self.ser and self.ser.is_open:
                 return True
+            now = time.time()
+            if now - self.last_reconnect_time < 2.0:
+                return False
+            self.last_reconnect_time = now
             self.port = self.auto_detect_port()
             if not self.port:
                 self.connected = False
@@ -148,8 +153,12 @@ class DobotController:
                 # ID 83: SetPTPCommonParams (2 floats: velocityRatio=50%, accelerationRatio=50%)
                 self._send_raw_cmd(id=83, ctrl=1, params=struct.pack('<2f', 50.0, 50.0))
 
+                # 4. CẤU HÌNH CHÂN CÔNG TẮC HÀNH TRÌNH GP2 (EIO 14) THÀNH DIGITAL INPUT (ID 131)
+                # address=14 (SWITCH_PIN), mode=4 (DI), isQueued=0
+                self._send_raw_cmd(id=131, ctrl=1, params=bytes([SWITCH_PIN, 4, 0]))
+
                 self.connected = True
-                print(f"[+] Kết nối thành công với Dobot tại cổng: {self.port}")
+                print(f"[+] Kết nối thành công với Dobot tại cổng: {self.port} (Đã bật EIO {SWITCH_PIN} làm cữ hành trình)")
                 return True
             except Exception as e:
                 print(f"[-] Lỗi kết nối {self.port}: {e}")
@@ -251,6 +260,26 @@ class DobotController:
         mode=1: MOVJ_XYZ (nội suy góc khớp - chống kẹt điểm kỳ dị)
         mode=2: MOVL_XYZ (chuyển động thẳng)
         """
+        # 1. Khóa liên động: Từ chối di chuyển cánh tay khi ray đang chạy
+        if self.rail_is_moving:
+            print("[-] CẢNH BÁO: Ray trượt đang di chuyển! Từ chối lệnh di chuyển cánh tay để tránh va chạm.")
+            return False
+
+        # 2. Kiểm tra giới hạn an toàn vùng làm việc của Dobot Magician
+        r_horiz = math.hypot(float(x), float(y))
+        if r_horiz < 140.0:
+            print(f"[-] CẢNH BÁO: Điểm đến quá gần chân đế ({r_horiz:.1f}mm < 140mm)! Hủy lệnh để tránh lỗi IK Singularity (0x11).")
+            return False
+        if r_horiz > 330.0:
+            print(f"[-] CẢNH BÁO: Điểm đến vượt quá tầm với tối đa ({r_horiz:.1f}mm > 330mm)!")
+            return False
+        if float(z) < -65.0:
+            print(f"[-] CẢNH BÁO: Cao độ Flange Z quá thấp ({float(z):.1f}mm < -65mm)! Nguy cơ đâm mặt bàn.")
+            return False
+        if float(z) > 165.0:
+            print(f"[-] CẢNH BÁO: Cao độ Flange Z quá cao ({float(z):.1f}mm > 165mm)!")
+            return False
+
         with self.lock:
             if not self.connected:
                 self.connect()
@@ -261,7 +290,7 @@ class DobotController:
                 # ID 84: SetPTPCmd, ctrl=3 (Queued write)
                 params = bytes([mode]) + struct.pack("<4f", float(x), float(y), float(z), float(r))
                 self._send_raw_cmd(id=84, ctrl=3, params=params)
-                print(f"[+] ĐÃ GỬI LỆNH DI CHUYỂN PTP (mode={mode}): X={x:.1f}, Y={y:.1f}, Z={z:.1f}, R={r:.1f}")
+                print(f"[+] ĐÃ GỬI LỆNH DI CHUYỂN PTP (mode={mode}): X={float(x):.1f}, Y={float(y):.1f}, Z={float(z):.1f}, R={float(r):.1f}")
                 return True
         return False
 
@@ -271,6 +300,9 @@ class DobotController:
         Tính toán tọa độ đích tuyệt đối từ vị trí hiện tại và dùng PTPMOVJXYZ (mode=1)
         Hoàn toàn miễn nhiễm với điểm kỳ dị IK, ngăn chặn tuyệt đối lỗi đèn đỏ!
         """
+        if self.rail_is_moving:
+            return False, "⚠️ Ray trượt đang di chuyển! Vui lòng chờ ray dừng trước khi Jog cánh tay."
+
         cur = self.get_pose() or self.last_pose
         if not cur:
             return False, "Không đọc được tọa độ hiện tại của robot"
@@ -301,6 +333,14 @@ class DobotController:
         Di chuyển tới các góc khớp tuyệt đối (J1, J2, J3, J4 theo độ)
         mode=4: MOVJ_ANGLE
         """
+        if self.rail_is_moving:
+            print("[-] CẢNH BÁO: Ray trượt đang di chuyển! Từ chối lệnh xoay khớp cánh tay.")
+            return False
+
+        if (float(j2) + float(j3)) > 160.0:
+            print(f"[-] CẢNH BÁO: Tổng góc J2 + J3 = {float(j2)+float(j3):.1f}° > 160° vi phạm cơ cấu bình hành!")
+            return False
+
         with self.lock:
             if not self.connected:
                 self.connect()
@@ -351,6 +391,10 @@ class DobotController:
         1. Xóa cờ lỗi & kích hoạt queue (ID 20 + 245 + 240)
         2. Gửi lệnh Homing (ID 31, Ctrl 1)
         """
+        if self.rail_is_moving:
+            print("[-] CẢNH BÁO: Ray trượt đang di chuyển! Từ chối lệnh Homing cánh tay.")
+            return False
+
         with self.lock:
             if not self.connected:
                 self.connect()
@@ -372,6 +416,16 @@ class DobotController:
         2. Bay ngang tới (X_đích, Y_đích) ở độ cao Safe Z
         3. Hạ xuống (Z_đích)
         """
+        if self.rail_is_moving:
+            print("[-] CẢNH BÁO: Ray trượt đang di chuyển! Từ chối lệnh Safe Jump cánh tay.")
+            return False
+
+        # Kiểm tra giới hạn an toàn vùng làm việc của Dobot Magician
+        r_horiz = math.hypot(float(target_x), float(target_y))
+        if r_horiz < 140.0 or r_horiz > 330.0 or float(target_z) < -65.0 or float(target_z) > 165.0:
+            print(f"[-] CẢNH BÁO: Điểm Safe Jump nằm ngoài vùng an toàn: X={float(target_x):.1f}, Y={float(target_y):.1f}, Z={float(target_z):.1f}")
+            return False
+
         with self.lock:
             if not self.connected:
                 self.connect()
@@ -382,8 +436,14 @@ class DobotController:
                 _, params = self._read_response(expected_id=10, timeout=0.15)
                 if params and len(params) >= 16:
                     cur_x, cur_y, cur_z, cur_r = struct.unpack("<4f", params[:16])
+                elif self.last_pose:
+                    cur_x = self.last_pose["x"]
+                    cur_y = self.last_pose["y"]
+                    cur_z = self.last_pose["z"]
+                    cur_r = self.last_pose["r"]
                 else:
-                    cur_x, cur_y, cur_z, cur_r = target_x, target_y, target_z, target_r
+                    print("[-] Không đọc được tọa độ hiện tại của robot cho Safe Jump!")
+                    return False
 
                 if safe_z is None:
                     safe_flange_z = max(cur_z, float(target_z)) + 25.0
@@ -421,9 +481,8 @@ class DobotController:
             if not self.connected:
                 return self.rail_switch_state
             try:
-                self.ser.reset_input_buffer()
                 self._send_raw_cmd(133, 0, bytes([SWITCH_PIN]))
-                rid, par = self._read_response(expected_id=133, timeout=0.04)
+                rid, par = self._read_response(expected_id=133, timeout=0.08)
                 if par and len(par) >= 2 and par[0] == SWITCH_PIN:
                     self.rail_switch_state = 1 if par[1] == 1 else 0
                     return self.rail_switch_state
@@ -431,9 +490,8 @@ class DobotController:
                 pass
         return self.rail_switch_state
 
-    def rail_stop(self):
-        """Dừng khẩn cấp động cơ ray trượt"""
-        self.stop_requested = True
+    def _stop_stepper_pulses(self):
+        """Chỉ dừng xung động cơ bước mà KHÔNG gán cờ stop_requested = True"""
         with self.lock:
             if self.connected:
                 params = struct.pack("<B B i I", RAIL_INDEX, 0, 0, 0)
@@ -442,6 +500,11 @@ class DobotController:
                 self._send_raw_cmd(240, 1)
                 self._send_raw_cmd(136, 3, params=params)
                 self._send_raw_cmd(240, 1)
+
+    def rail_stop(self):
+        """Dừng khẩn cấp động cơ ray trượt do người dùng yêu cầu"""
+        self.stop_requested = True
+        self._stop_stepper_pulses()
         self.rail_is_moving = False
         print("[!] ĐÃ DỪNG KHẨN CẤP ĐỘNG CƠ RAY TRƯỢT")
 
@@ -451,18 +514,21 @@ class DobotController:
         dist_mm > 0: Chạy ra xa switch (tăng L)
         dist_mm < 0: Chạy về hướng switch (giảm L)
         """
-        if abs(dist_mm) < 0.1:
-            return True, f"Vị trí ray: {self.rail_pos:.1f} mm"
-
         with self.rail_lock:
+            # 1. Kẹp giới hạn an toàn phần mềm [0.0, RAIL_MAX_MM]
+            target_pos = max(0.0, min(RAIL_MAX_MM, self.rail_pos + float(dist_mm)))
+            clamped_dist = target_pos - self.rail_pos
+            if abs(clamped_dist) < 0.1:
+                return True, f"⚠️ Ray đã ở giới hạn biên ({self.rail_pos:.1f} mm), không thể di chuyển thêm!"
+
             self.stop_requested = False
             self.rail_is_moving = True
-            pulses = int(abs(dist_mm) * PULSES_PER_MM)
+            pulses = int(abs(clamped_dist) * PULSES_PER_MM)
             safe_speed = max(5.0, min(80.0, speed_mm_s))
             speed_pulses = int(safe_speed * PULSES_PER_MM)
-            dir_speed = -speed_pulses if dist_mm >= 0 else speed_pulses
+            dir_speed = -speed_pulses if clamped_dist >= 0 else speed_pulses
 
-            if dist_mm < 0 and self.get_rail_switch() == 1:
+            if clamped_dist < 0 and self.get_rail_switch() == 1:
                 self.rail_is_moving = False
                 return False, "⚠️ Công tắc hành trình đang chạm, không thể lùi thêm!"
 
@@ -480,18 +546,18 @@ class DobotController:
             t0 = time.time()
             interrupted = False
             start_p = self.rail_pos
-            sign = 1 if dist_mm >= 0 else -1
+            sign = 1 if clamped_dist >= 0 else -1
 
             while time.time() - t0 < t_duration:
                 if self.stop_requested:
-                    self.rail_stop()
+                    self._stop_stepper_pulses()
                     interrupted = True
                     break
                 elapsed = time.time() - t0
                 fraction = min(1.0, elapsed / t_duration)
-                self.rail_pos = max(0.0, min(RAIL_MAX_MM, start_p + sign * fraction * abs(dist_mm)))
-                if dist_mm < 0 and self.get_rail_switch() == 1:
-                    self.rail_stop()
+                self.rail_pos = max(0.0, min(RAIL_MAX_MM, start_p + sign * fraction * abs(clamped_dist)))
+                if clamped_dist < 0 and self.get_rail_switch() == 1:
+                    self._stop_stepper_pulses()
                     self.rail_pos = 0.0
                     self._save_rail_state(0.0)
                     interrupted = True
@@ -499,7 +565,7 @@ class DobotController:
                 time.sleep(0.04)
 
             if not interrupted:
-                self.rail_pos = max(0.0, min(RAIL_MAX_MM, start_p + dist_mm))
+                self.rail_pos = max(0.0, min(RAIL_MAX_MM, start_p + clamped_dist))
                 self._save_rail_state(self.rail_pos)
             else:
                 self._save_rail_state(self.rail_pos)
@@ -518,9 +584,11 @@ class DobotController:
     def rail_home(self):
         """
         Dò gốc chuẩn xác cho ray trượt:
-        1. Nhả switch nếu đang bị đè
-        2. Coarse search về hướng switch
-        3. Fine search nhả switch xác định 0.0mm
+        1. Nhả switch nếu đang bị đè (chạy ra xa switch)
+        2. Coarse search về hướng switch (25 mm/s)
+        3. Fine search nhả switch xác định điểm 0.0mm (8 mm/s)
+        4. Thoát cữ an toàn (Retreat): nhích ra 5.0mm để giải phóng hoàn toàn công tắc,
+           đảm bảo không bị kẹt hay chạm cữ cơ học sau khi về gốc.
         Hỗ trợ ngắt dừng khẩn cấp tức thời (self.stop_requested).
         """
         with self.rail_lock:
@@ -535,36 +603,44 @@ class DobotController:
                 self._send_raw_cmd(240, 1)
 
             if self.stop_requested:
-                self.rail_stop()
+                self.rail_is_moving = False
                 return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
 
-            # 1. Nhả switch nếu đang bị đè
+            # 1. Nhả switch nếu lúc bắt đầu đang bị đè (chạy ra xa switch)
             if self.get_rail_switch() == 1:
-                params = struct.pack("<B B i I", RAIL_INDEX, 1, -int(25.0 * PULSES_PER_MM), int(15.0 * PULSES_PER_MM))
+                release_speed = int(15.0 * PULSES_PER_MM)
+                release_pulses = int(25.0 * PULSES_PER_MM)
+                params = struct.pack("<B B i I", RAIL_INDEX, 1, -release_speed, release_pulses)
                 with self.lock:
                     self._send_raw_cmd(136, 3, params=params)
                     self._send_raw_cmd(240, 1)
-                t_end = time.time() + 1.0
+                t_end = time.time() + (release_pulses / release_speed)
                 while time.time() < t_end:
                     if self.stop_requested:
-                        self.rail_stop()
+                        self._stop_stepper_pulses()
+                        self.rail_is_moving = False
                         return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
+                    if self.get_rail_switch() == 0:
+                        break
                     time.sleep(0.04)
+                self._stop_stepper_pulses()
+                time.sleep(0.2)
 
             if self.stop_requested:
-                self.rail_stop()
+                self.rail_is_moving = False
                 return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
 
-            # 2. Coarse search (25 mm/s)
+            # 2. Coarse search (25 mm/s về hướng switch: dir_speed > 0)
             step_mm = 20.0
             step_pulses = int(step_mm * PULSES_PER_MM)
             step_speed = int(25.0 * PULSES_PER_MM)
             params = struct.pack("<B B i I", RAIL_INDEX, 1, step_speed, step_pulses)
 
             found = False
-            for _ in range(65):
+            for step_idx in range(65):
                 if self.stop_requested:
-                    self.rail_stop()
+                    self._stop_stepper_pulses()
+                    self.rail_is_moving = False
                     return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
                 if self.get_rail_switch() == 1:
                     found = True
@@ -572,35 +648,49 @@ class DobotController:
                 with self.lock:
                     self._send_raw_cmd(136, 3, params=params)
                     self._send_raw_cmd(240, 1)
-                t_end = time.time() + (step_pulses / step_speed)
-                while time.time() < t_end:
+                t_start = time.time()
+                t_duration = step_pulses / step_speed
+                while time.time() - t_start < t_duration:
                     if self.stop_requested:
-                        self.rail_stop()
+                        self._stop_stepper_pulses()
+                        self.rail_is_moving = False
                         return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
+                    # Cập nhật vị trí hiển thị giảm dần trong khi chạy về home
+                    self.rail_pos = max(0.0, self.rail_pos - (25.0 * 0.02))
                     if self.get_rail_switch() == 1:
                         found = True
                         break
-                    time.sleep(0.01)
+                    time.sleep(0.02)
                 if found:
                     break
 
             if self.stop_requested:
-                self.rail_stop()
+                self._stop_stepper_pulses()
+                self.rail_is_moving = False
                 return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
 
-            self.rail_stop()
+            self._stop_stepper_pulses()
             time.sleep(0.2)
 
+            if not found and self.get_rail_switch() == 0:
+                self.rail_is_moving = False
+                return False, "⚠️ Không tìm thấy công tắc hành trình sau hành trình tối đa (1300mm)!"
+
+            # Khi đã chạm cữ, thiết lập mốc 0.0mm tạm thời
+            self.rail_pos = 0.0
+
             if self.stop_requested:
+                self.rail_is_moving = False
                 return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
 
-            # 3. Fine search (8 mm/s nhả cữ)
+            # 3. Fine search (8 mm/s nhả cữ: dir_speed < 0)
             fine_step = int(1.0 * PULSES_PER_MM)
             fine_speed = int(8.0 * PULSES_PER_MM)
             fine_params = struct.pack("<B B i I", RAIL_INDEX, 1, -fine_speed, fine_step)
-            for _ in range(30):
+            for _ in range(40):
                 if self.stop_requested:
-                    self.rail_stop()
+                    self._stop_stepper_pulses()
+                    self.rail_is_moving = False
                     return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
                 if self.get_rail_switch() == 0:
                     break
@@ -610,20 +700,49 @@ class DobotController:
                 t_end = time.time() + (fine_step / fine_speed + 0.02)
                 while time.time() < t_end:
                     if self.stop_requested:
-                        self.rail_stop()
+                        self._stop_stepper_pulses()
+                        self.rail_is_moving = False
                         return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
                     time.sleep(0.01)
 
             if self.stop_requested:
-                self.rail_stop()
+                self._stop_stepper_pulses()
+                self.rail_is_moving = False
                 return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
 
-            self.rail_stop()
-            self.rail_pos = 0.0
+            self._stop_stepper_pulses()
+            time.sleep(0.2)
+
+            # 4. Thoát cữ an toàn (Retreat): Nhích ra xa cữ 5.0mm (tốc độ 15 mm/s)
+            # Luôn reset stop_requested = False phòng hờ
+            self.stop_requested = False
+            retreat_mm = 5.0
+            retreat_pulses = int(retreat_mm * PULSES_PER_MM)
+            retreat_speed = int(15.0 * PULSES_PER_MM)
+            retreat_params = struct.pack("<B B i I", RAIL_INDEX, 1, -retreat_speed, retreat_pulses)
+            with self.lock:
+                self._send_raw_cmd(136, 3, params=retreat_params)
+                self._send_raw_cmd(240, 1)
+            t_start = time.time()
+            t_duration = retreat_pulses / retreat_speed
+            while time.time() - t_start < t_duration + 0.05:
+                if self.stop_requested:
+                    self._stop_stepper_pulses()
+                    self.rail_is_moving = False
+                    return False, "🛑 Đã hủy Homing ray trượt do người dùng nhấn Dừng!"
+                fraction = min(1.0, (time.time() - t_start) / t_duration)
+                self.rail_pos = round(fraction * retreat_mm, 1)
+                time.sleep(0.02)
+
+            self._stop_stepper_pulses()
+            time.sleep(0.1)
+
+            # Cập nhật tọa độ chuẩn: điểm 0.0mm là ngay mép nhả cữ, hiện tại ray đang ở 5.0mm
+            self.rail_pos = retreat_mm
             self.rail_homed = True
-            self._save_rail_state(0.0)
+            self._save_rail_state(self.rail_pos)
             self.rail_is_moving = False
-            return True, "🎉 Homing ray trượt thành công! Gốc tọa độ L = 0.0 mm."
+            return True, f"🎉 Homing ray trượt thành công! Đã tự động thoát cữ ra L = {self.rail_pos:.1f} mm an toàn."
 
 
 robot = DobotController()
@@ -799,6 +918,7 @@ class ApiCmdHandler(tornado.web.RequestHandler):
         pose["l"] = round(robot.rail_pos, 1)
         pose["rail_switch"] = robot.rail_switch_state
         pose["rail_homed"] = robot.rail_homed
+        pose["rail_moving"] = robot.rail_is_moving
         self.write({"status": "ok", "pose": pose, "connected": robot.connected})
 
     def post(self):
@@ -861,14 +981,19 @@ poll_counter = 0
 def poll_robot_pose():
     global poll_counter
     if connected_clients:
-        pose = robot.get_pose()
+        # Nếu ray trượt đang chạy homing/jogging, hạn chế gửi GetPose liên tục để tránh nghẽn bus serial với GetIODI
+        if robot.rail_is_moving:
+            pose = robot.last_pose
+        else:
+            pose = robot.get_pose()
         poll_counter += 1
         
-        # Cứ 10 vòng đọc (~500ms) kiểm tra trạng thái cờ lỗi & công tắc hành trình
+        # Cứ 10 vòng đọc (~500ms) kiểm tra trạng thái cờ lỗi & công tắc hành trình (khi không di chuyển ray)
         alarms = robot.cached_alarms
         if poll_counter % 10 == 0:
-            alarms = robot.get_alarms()
-            robot.get_rail_switch()
+            if not robot.rail_is_moving:
+                alarms = robot.get_alarms()
+                robot.get_rail_switch()
         
         has_alarm = bool(alarms and len(alarms) > 0)
         
